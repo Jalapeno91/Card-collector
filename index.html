@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>The Ledger</title>
+<meta name="description" content="A private archive for your card collection." />
+<meta name="theme-color" content="#1b1f2b" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="The Ledger" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/ledger.css" />
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand" id="homeBtn">
+      <div class="mark">Est. by you</div>
+      <h1>The Ledger</h1>
+      <div class="sub">card collection archive</div>
+    </div>
+    <div class="coll-list" id="collList"></div>
+    <div class="sidebar-foot">
+      <button class="ghost-btn" id="addCollBtn">+ new collection</button>
+      <button class="sync-status" id="syncStatusBtn" data-state="off" title="Sync settings">
+        <span class="sync-dot"></span><span class="sync-label" id="syncLabel">Sync off</span>
+      </button>
+      <button class="ghost-btn install-btn" id="installBtn" style="margin-top:8px;">⊞ Install app</button>
+      <button class="ghost-btn" id="exportBackupBtn" style="margin-top:8px;">⬇ Export backup</button>
+      <button class="ghost-btn" id="importBackupBtn" style="margin-top:8px;">⬆ Import backup</button>
+      <input id="importBackupInput" type="file" accept="application/json,.json" style="display:none;" />
+    </div>
+  </aside>
+
+  <main class="main" id="mainView"></main>
+</div>
+<div class="overlay" id="collOverlay">
+  <div class="modal">
+    <h3 id="collModalTitle">New collection</h3>
+    <div class="field">
+      <label>Name</label>
+      <input id="collName" placeholder="e.g. Paper Bride" />
+    </div>
+    <div class="field">
+      <label>Theme color</label>
+      <input id="collColor" type="color" value="#c9a227" />
+    </div>
+    <div class="field">
+      <label>Or detect theme from a booster box photo</label>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <input id="boxPhotoInput" type="file" accept="image/*" style="flex:1; font-size:12px;" />
+        <div id="boxPreview" style="width:38px; height:38px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); flex-shrink:0; background-size:cover; background-position:center;"></div>
+      </div>
+      <div style="font-size:11px; color:var(--parchment-dim); margin-top:6px;">The photo is only used to sample a color right here in your browser — it isn't saved with your collection.</div>
+    </div>
+    <div class="field">
+      <label>Collection logo (optional — shown wherever this collection appears)</label>
+      <input id="collLogoInput" type="file" accept="image/*" />
+      <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+        <div id="collLogoPreview" style="width:52px; height:52px; border-radius:8px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0;"></div>
+        <button type="button" class="btn-ghost" id="removeCollLogoBtn" style="display:none;">Remove logo</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost danger" id="deleteCollBtn" style="display:none; margin-right:auto;">Delete collection</button>
+      <button class="btn-ghost" id="cancelColl">Cancel</button>
+      <button class="btn-primary" id="saveColl">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="subOverlay">
+  <div class="modal">
+    <h3 id="subModalTitle">New series</h3>
+    <div class="field">
+      <label>Name</label>
+      <input id="subName" placeholder="e.g. Series 1" />
+    </div>
+    <div class="field">
+      <label>Total cards in this set (used only if you don't set quantities per rarity below)</label>
+      <input id="subTotal" type="number" min="0" placeholder="e.g. 60" />
+    </div>
+    <div class="field">
+      <label>Box photo (optional)</label>
+      <input id="subPhotoInput" type="file" accept="image/*" />
+      <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+        <div id="subPhotoPreview" style="width:70px; height:46px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0;"></div>
+        <button type="button" class="btn-ghost" id="removeSubPhotoBtn" style="display:none;">Remove photo</button>
+      </div>
+    </div>
+    <div class="field" id="rarityManageField">
+      <label>Rarity types for this series</label>
+      <div class="rarity-manage-list" id="rarityManageList"></div>
+      <div class="rarity-add-row">
+        <input id="newRarityName" type="text" placeholder="New rarity name (e.g. SSR)" />
+        <input id="newRarityColor" type="color" value="#8ab6ff" />
+        <input id="newRarityTotal" type="number" min="0" placeholder="Qty in set" />
+        <button class="btn-ghost" id="addRarityBtn" type="button">Add</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost danger" id="deleteSubBtn" style="display:none; margin-right:auto;">Delete series</button>
+      <button class="btn-ghost" id="cancelSub">Cancel</button>
+      <button class="btn-primary" id="saveSub">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="cardOverlay">
+  <div class="modal">
+    <h3 id="cardModalTitle">Add a card</h3>
+    <div class="field">
+      <label>Card name</label>
+      <input id="fName" placeholder="e.g. The Weeping Bride" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Rarity</label>
+        <select id="fRarity"></select>
+      </div>
+      <div class="field">
+        <label>Card # in rarity</label>
+        <input id="fNumber" type="number" min="1" placeholder="e.g. 14" />
+      </div>
+      <div class="field">
+        <label>Quantity owned</label>
+        <input id="fQty" type="number" min="0" value="1" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Card effect (for the 3D viewer)</label>
+      <div class="effect-picker" id="effectPicker"></div>
+    </div>
+    <div class="field">
+      <label>Card photo — front (optional — shown in the 3D viewer instead of the generated design)</label>
+      <input id="fPhotoInput" type="file" accept="image/*" />
+      <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+        <div id="fPhotoPreview" style="width:56px; height:78px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0;"></div>
+        <button type="button" class="btn-ghost" id="removePhotoBtn" style="display:none;">Remove photo</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Card photo — back (optional — flip the 3D viewer to see it)</label>
+      <input id="fPhotoBackInput" type="file" accept="image/*" />
+      <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+        <div id="fPhotoBackPreview" style="width:56px; height:78px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0;"></div>
+        <button type="button" class="btn-ghost" id="removePhotoBackBtn" style="display:none;">Remove photo</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Condition</label>
+      <input id="fCondition" placeholder="e.g. Mint" />
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="fNotes" rows="2" placeholder="Anything worth remembering"></textarea>
+    </div>
+    <div class="field">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; text-transform:none; letter-spacing:0;">
+        <input type="checkbox" id="fLinkToggle" style="width:auto;" />
+        This exact card also counts toward slots in other series
+      </label>
+      <div id="linkedSlotsWrap" style="display:none; margin-top:10px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost danger" id="deleteCardBtn" style="display:none; margin-right:auto;">Delete card</button>
+      <button class="btn-ghost" id="cancelCard">Cancel</button>
+      <button class="btn-primary" id="saveCard">Save card</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="confirmOverlay">
+  <div class="modal" style="width:380px;">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p id="confirmBody" style="color:var(--parchment-dim); font-size:14px;"></p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="confirmCancel">Cancel</button>
+      <button class="btn-primary" id="confirmOk" style="background:var(--rose);">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="viewer-overlay" id="viewerOverlay">
+  <button class="viewer-close" id="viewerClose">✕</button>
+  <div class="stage-wrap">
+    <div class="card3d" id="card3d">
+      <div class="c-face c-face-front">
+        <div class="c-base" id="cBase"></div>
+        <div class="c-scrim"></div>
+        <div class="c-fx" id="cFx"></div>
+        <div class="c-content">
+          <div class="c-eyebrow" id="cEyebrow"></div>
+          <div class="c-title" id="cTitle"></div>
+          <div class="c-emblem"><div class="ring" id="cRing"></div></div>
+          <div class="c-rarity-band">
+            <span id="cRarity"></span>
+            <span id="cQty"></span>
+          </div>
+        </div>
+      </div>
+      <div class="c-face c-face-back">
+        <div class="c-base" id="cBaseBack"></div>
+        <div class="c-scrim"></div>
+        <div class="c-content" style="align-items:center; justify-content:center; text-align:center;">
+          <div class="c-eyebrow">Back</div>
+          <div id="cBackPlaceholder" style="margin-top:10px; font-family:'Fraunces',serif; font-size:15px; opacity:.8;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewer-meta">
+    <div id="vName" style="font-family:'Fraunces',serif; font-size:17px;"></div>
+    <div class="fx-hint" id="vHint">Move your mouse over the card to tilt it.</div>
+    <div style="display:flex; gap:8px; justify-content:center; margin-top:12px;">
+      <button class="btn-ghost" id="flipCardBtn">⟲ Flip to back</button>
+      <button class="btn-ghost" id="viewerEditBtn">✎ Edit</button>
+      <button class="btn-ghost danger" id="viewerDeleteBtn">✕ Delete</button>
+    </div>
+    <div class="notes" id="vNotes"></div>
+  </div>
+</div>
+
+<canvas id="colorCanvas" width="60" height="60" style="display:none;"></canvas>
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="syncOverlay">
+  <div class="modal">
+    <h3>Sync</h3>
+    <p class="settings-note">
+      Your collection always lives on this device first, so the app works with no signal.
+      Connect a <a href="https://supabase.com" target="_blank" rel="noopener" style="color:var(--brass);">Supabase</a>
+      project and it also syncs to your phone and laptop. Setup steps are in <code>docs/SETUP.md</code>.
+    </p>
+
+    <div class="field">
+      <label>Project URL</label>
+      <input id="syncUrl" placeholder="https://xxxxxxxx.supabase.co" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label>Anon / publishable key</label>
+      <input id="syncKey" placeholder="eyJhbGciOi…" autocomplete="off" spellcheck="false" />
+    </div>
+
+    <div class="settings-section" id="syncAuthSection">
+      <h4>Account</h4>
+      <div id="syncSignedOut">
+        <div class="field-row">
+          <div class="field">
+            <label>Email</label>
+            <input id="syncEmail" type="email" autocomplete="username" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input id="syncPassword" type="password" autocomplete="current-password" />
+          </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-primary" id="syncSignInBtn">Sign in</button>
+          <button class="btn-ghost" id="syncSignUpBtn">Create account</button>
+        </div>
+      </div>
+      <div id="syncSignedIn" style="display:none;">
+        <div class="signed-in-as">Signed in as <strong id="syncEmailLabel"></strong></div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-primary" id="syncNowBtn">Sync now</button>
+          <button class="btn-ghost" id="syncSignOutBtn">Sign out</button>
+        </div>
+      </div>
+      <div class="sync-error" id="syncError" style="display:none;"></div>
+      <div class="sync-log" id="syncLog"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost danger" id="syncDisconnectBtn" style="display:none; margin-right:auto;">Disconnect</button>
+      <button class="btn-ghost" id="syncClose">Close</button>
+      <button class="btn-primary" id="syncSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

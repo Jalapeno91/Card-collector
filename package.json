@@ -1,0 +1,16 @@
+{
+  "name": "the-ledger",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A local-first card collection archive that installs as a PWA and syncs across devices.",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs",
+    "test": "node test/run.mjs",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

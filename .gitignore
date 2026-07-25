@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+*.log
+
+# Local backups exported from the app
+card-ledger-backup-*.json
+
+# Editor / tooling
+.vscode/
+.idea/
+*.swp
