@@ -33,18 +33,17 @@ function openDb(){
   return dbPromise;
 }
 
+// Queues the writes `fn` issues and resolves once the transaction commits, so
+// callers can await durability rather than just the request being accepted.
+// `fn` must be synchronous: an await inside it would let the transaction
+// auto-close before the next request is queued.
 function run(storeNames, mode, fn){
   return openDb().then(db => new Promise((resolve, reject) => {
     const tx = db.transaction(storeNames, mode);
-    let result;
-    tx.oncomplete = () => resolve(result);
+    tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
-    result = fn(storeNames.map(n => tx.objectStore(n)), tx);
-    // `fn` may return a promise-like of its own value; unwrap it before commit.
-    if (result && typeof result.then === 'function'){
-      result.then(v => { result = v; }, reject);
-    }
+    fn(storeNames.map(n => tx.objectStore(n)), tx);
   }));
 }
 
