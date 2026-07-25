@@ -135,6 +135,33 @@ await ev(`(async () => { const sy = await import('/js/storage/sync.js'); await s
 check('a remote delete removes the card here',
   await ev(`(async()=>{const st=await import('/js/state.js');return st.data.collections[0].subcollections[0].cards.length;})()`), 0);
 
+console.log('\nre-upload from this device');
+await ev(`(async () => {
+  const st = await import('/js/state.js'); const s = await import('/js/store.js');
+  st.data.collections[0].subcollections[0].cards.push({ id:'k3', name:'Kept Locally', rarity:'SSR', number:2, qty:1,
+    effect:'matte', condition:'', notes:'', linkedSlots:[] });
+  await s.saveData();
+  const sy = await import('/js/storage/sync.js');
+  await sy.sync();
+  return 1;
+})()`);
+// Simulate the server losing everything, as happens when the account is deleted
+// and recreated: the local rows are clean, so an ordinary sync pushes nothing.
+await ev(`(() => { __server.tables.collections = []; __server.tables.subcollections = []; __server.tables.cards = []; __server.objects = {}; return 1; })()`);
+const idle = await ev(`(async () => (await import('/js/storage/sync.js')).sync())()`);
+check('an ordinary sync pushes nothing when rows are clean', idle.pushedRows, 0);
+check('server really is empty', await ev(`__server.tables.cards.length`), 0);
+await ev(`(async () => { const l = await import('/js/storage/local.js'); await l.markAllDirty(); return 1; })()`);
+const reup = await ev(`(async () => (await import('/js/storage/sync.js')).sync())()`);
+check('re-upload pushes every row again', reup.pushedRows >= 3, true);
+check('re-upload pushes the photos again', reup.pushedBlobs >= 1, true);
+// Tombstones ride along too, so deletions made here are not forgotten by the
+// server — only the live rows should read back as present.
+check('the locally-kept card is back on the server',
+  await ev(`__server.tables.cards.filter(c=>!c.deleted_at).map(c=>c.name).sort()`), ['Kept Locally']);
+check('deletions are re-uploaded as tombstones, not resurrected',
+  await ev(`__server.tables.cards.filter(c=>c.deleted_at).map(c=>c.name).sort()`), ['From The Phone', 'The Weeping Bride']);
+
 console.log('\noffline');
 await ev(`(Object.defineProperty(navigator,'onLine',{value:false,configurable:true}), 1)`);
 const off = await ev(`(async () => (await import('/js/storage/sync.js')).sync())()`);

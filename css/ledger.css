@@ -280,3 +280,9 @@
 }
 .install-btn{ display:none; }
 .install-btn.visible{ display:block; }
+
+.password-wrap{ position:relative; display:flex; align-items:center; }
+.password-wrap input{ padding-right:52px; }
+.reveal-btn{ position:absolute; right:6px; background:none; border:none; color:var(--parchment-dim); cursor:pointer; font-size:11px; font-family:'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:.05em; padding:6px 6px; }
+.reveal-btn:hover{ color:var(--brass); }
+.settings-hint{ font-size:11px; color:var(--parchment-dim); line-height:1.5; margin-top:8px; }

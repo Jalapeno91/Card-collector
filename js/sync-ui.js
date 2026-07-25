@@ -3,6 +3,7 @@
 import { el, showToast } from './ui.js';
 import * as sb from './storage/supabase.js';
 import * as sync from './storage/sync.js';
+import * as local from './storage/local.js';
 import { loadData } from './store.js';
 import { openConfirm } from './modals/confirm.js';
 import { render } from './render.js';
@@ -83,6 +84,14 @@ export function initSyncUi(){
     showToast(url && key ? 'Sync settings saved' : 'Sync settings cleared');
   };
 
+  el('syncPasswordReveal').onclick = () => {
+    const input = el('syncPassword');
+    const shown = input.type === 'text';
+    input.type = shown ? 'password' : 'text';
+    el('syncPasswordReveal').textContent = shown ? 'show' : 'hide';
+    el('syncPasswordReveal').setAttribute('aria-label', shown ? 'Show password' : 'Hide password');
+  };
+
   el('syncSignInBtn').onclick = async () => {
     const email = el('syncEmail').value.trim();
     const password = el('syncPassword').value;
@@ -91,13 +100,19 @@ export function initSyncUi(){
     try{
       await sb.signIn(email, password);
       el('syncPassword').value = '';
+      // The pull watermark belongs to whichever account was signed in before,
+      // so a different one must start from the beginning or it would see
+      // nothing that predates the switch.
+      await sync.resetSyncWatermark();
       refreshModal();
       setLog('Signed in — syncing…');
       const result = await sync.sync();
       await reloadIfChanged(result);
     }catch(err){
       setLog('');
-      setError(err.message);
+      setError(err.message === 'Invalid login credentials'
+        ? 'Invalid login credentials — that is also what you get when no account exists for this email yet. Check Authentication → Users in Supabase, or use Create account.'
+        : err.message);
     }
   };
 
@@ -109,6 +124,7 @@ export function initSyncUi(){
     try{
       const { needsConfirmation } = await sb.signUp(email, password);
       el('syncPassword').value = '';
+      await sync.resetSyncWatermark();
       refreshModal();
       if (needsConfirmation){
         setLog('Account created. Confirm the link in your email, then sign in.');
@@ -135,6 +151,29 @@ export function initSyncUi(){
     const result = await sync.sync();
     await reloadIfChanged(result);
     if (result && result.error) setError(result.error.message || String(result.error));
+  };
+
+  el('syncReuploadBtn').onclick = () => {
+    openConfirm(
+      'Re-upload everything from this device?',
+      'Every collection, series, card and photo on this device is marked as new and pushed to the server. Where the server has a different version of the same thing, this device wins. Anything the server has that this device has never seen is left alone.',
+      async () => {
+        setError(''); setLog('Marking everything for upload…');
+        try{
+          await local.markAllDirty();
+          setLog('Uploading…');
+          const result = await sync.sync();
+          if (result && result.error) throw result.error;
+          await reloadIfChanged(result);
+          setLog(`Uploaded ${result.pushedRows || 0} record(s) and ${result.pushedBlobs || 0} photo(s).`);
+          showToast('Re-upload complete');
+        }catch(err){
+          setLog('');
+          setError(err.message || String(err));
+        }
+      },
+      { okLabel: 'Re-upload', okColor: 'var(--accent)' }
+    );
   };
 
   el('syncDisconnectBtn').onclick = () => {

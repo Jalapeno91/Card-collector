@@ -291,3 +291,15 @@ export async function dropBlobRecord(key){
   await idb.del('blobs', key);
   blobStamps.delete(key);
 }
+
+// Marks every local row and photo as unsent, so the next sync pushes the whole
+// device up. The escape hatch for "this device has the copy I want to keep" —
+// after switching accounts, or recovering from a server-side mess.
+export async function markAllDirty(){
+  for (const store of ROW_STORES){
+    const rows = await idb.getAll(store);
+    if (rows.length) await idb.putMany(store, rows.map(r => ({ ...r, dirty: 1 })));
+  }
+  const blobs = await idb.getAll('blobs');
+  if (blobs.length) await idb.putMany('blobs', blobs.map(b => ({ ...b, dirty: 1 })));
+}

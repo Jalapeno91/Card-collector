@@ -259,7 +259,10 @@
           </div>
           <div class="field">
             <label>Password</label>
-            <input id="syncPassword" type="password" autocomplete="current-password" />
+            <div class="password-wrap">
+              <input id="syncPassword" type="password" autocomplete="current-password" />
+              <button type="button" id="syncPasswordReveal" class="reveal-btn" aria-label="Show password">show</button>
+            </div>
           </div>
         </div>
         <div style="display:flex; gap:10px;">
@@ -269,9 +272,15 @@
       </div>
       <div id="syncSignedIn" style="display:none;">
         <div class="signed-in-as">Signed in as <strong id="syncEmailLabel"></strong></div>
-        <div style="display:flex; gap:10px;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn-primary" id="syncNowBtn">Sync now</button>
           <button class="btn-ghost" id="syncSignOutBtn">Sign out</button>
+        </div>
+        <button class="btn-ghost" id="syncReuploadBtn" style="margin-top:10px; width:100%;">↑ Re-upload everything from this device</button>
+        <div class="settings-hint">
+          Use this after switching to a different account, when this device holds
+          the copy you want to keep. It marks everything here as new and pushes
+          it up, overwriting the server's version of anything it also has.
         </div>
       </div>
       <div class="sync-error" id="syncError" style="display:none;"></div>
