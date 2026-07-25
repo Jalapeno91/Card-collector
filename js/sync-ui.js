@@ -1,6 +1,6 @@
 // The sync settings modal and the status pill in the sidebar.
 
-import { el, showToast } from './ui.js';
+import { el, showToast, BUILD } from './ui.js';
 import * as sb from './storage/supabase.js';
 import * as sync from './storage/sync.js';
 import * as local from './storage/local.js';
@@ -65,6 +65,7 @@ function openSyncModal(){
 }
 
 export function initSyncUi(){
+  el('syncBuild').textContent = BUILD;
   sync.onStatus(paintStatus);
   sync.setAfterSync(reloadIfChanged);
   sync.refreshStatus();
