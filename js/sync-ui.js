@@ -43,7 +43,9 @@ function paintStatus(status){
   btn.title = status.error ? `${status.message} — ${status.error}` : status.message;
   if (el('syncOverlay').classList.contains('open')){
     setError(status.error || '');
-    if (status.state !== 'error') setLog(status.message);
+    if (status.state !== 'error'){
+      setLog(status.note ? `${status.message} — ${status.note}` : status.message);
+    }
   }
 }
 

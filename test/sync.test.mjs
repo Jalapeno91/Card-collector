@@ -135,6 +135,41 @@ await ev(`(async () => { const sy = await import('/js/storage/sync.js'); await s
 check('a remote delete removes the card here',
   await ev(`(async()=>{const st=await import('/js/state.js');return st.data.collections[0].subcollections[0].cards.length;})()`), 0);
 
+console.log('\na photo the server does not have');
+// The failure this guards against: a row arrives claiming a photo whose upload
+// never landed. Storage answers 400/not_found, and treating that as fatal used
+// to block every future sync on the device — including unrelated changes.
+await ev(`(() => {
+  const later = new Date(Date.now() + 240000).toISOString();
+  __server.tables.cards.push({ id:'k9', user_id:'user-1', subcollection_id:'s1', name:'Photo Never Uploaded', rarity:'SSR',
+    number:3, qty:1, effect:'matte', condition:'', notes:'', linked_slots:[], has_photo:true, has_back_photo:false,
+    photo_updated_at:later, back_photo_updated_at:null, created_at:later, updated_at:later, deleted_at:null });
+  // No object is placed in __server.objects for it, and Storage reports the
+  // absence the way Supabase actually does.
+  const inner = window.fetch;
+  window.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    if (u.pathname.includes('/storage/v1/object/') && (init.method || 'GET').toUpperCase() === 'GET'
+        && !__server.objects[u.pathname.replace('/storage/v1/object/card-photos/','')]) {
+      return new Response(JSON.stringify({ statusCode:'404', error:'not_found', message:'Object not found' }),
+        { status: 400, headers: { 'Content-Type':'application/json' } });
+    }
+    return inner(url, init);
+  };
+  return 1;
+})()`);
+const withMissing = await ev(`(async () => { const r = await (await import('/js/storage/sync.js')).sync(); return { ...r, error: r.error ? String(r.error.message || r.error) : null }; })()`);
+check('sync survives a photo that is not there', withMissing.error, null);
+check('the absence is counted, not thrown', withMissing.missingBlobs, 1);
+check('status stays healthy', await ev(`(async()=>(await import('/js/storage/sync.js')).getStatus().state)()`), 'synced');
+await ev(`(async () => { const s = await import('/js/store.js'); await s.loadData(); return 1; })()`);
+check('the card itself still arrives',
+  await ev(`(async()=>{const st=await import('/js/state.js');return st.data.collections[0].subcollections[0].cards.some(c=>c.name==='Photo Never Uploaded');})()`), true);
+// And once the photo does land, a later sync picks it up.
+await ev(`(() => { __server.objects['user-1/card-photo__k9'] = new Blob([new Uint8Array([255,216,255,224])], { type:'image/jpeg' }); return 1; })()`);
+const late = await ev(`(async () => (await import('/js/storage/sync.js')).sync())()`);
+check('a late-arriving photo is picked up afterwards', late.fetchedBlobs, 1);
+
 console.log('\nre-upload from this device');
 await ev(`(async () => {
   const st = await import('/js/state.js'); const s = await import('/js/store.js');
@@ -157,8 +192,9 @@ check('re-upload pushes every row again', reup.pushedRows >= 3, true);
 check('re-upload pushes the photos again', reup.pushedBlobs >= 1, true);
 // Tombstones ride along too, so deletions made here are not forgotten by the
 // server — only the live rows should read back as present.
-check('the locally-kept card is back on the server',
-  await ev(`__server.tables.cards.filter(c=>!c.deleted_at).map(c=>c.name).sort()`), ['Kept Locally']);
+check('the locally-kept cards are back on the server',
+  await ev(`__server.tables.cards.filter(c=>!c.deleted_at).map(c=>c.name).sort()`),
+  ['Kept Locally', 'Photo Never Uploaded']);
 check('deletions are re-uploaded as tombstones, not resurrected',
   await ev(`__server.tables.cards.filter(c=>c.deleted_at).map(c=>c.name).sort()`), ['From The Phone', 'The Weeping Bride']);
 

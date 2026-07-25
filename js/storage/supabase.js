@@ -188,9 +188,22 @@ export async function uploadObject(path, blob){
   if (!res.ok) throw await readError(res, 'Could not upload a photo');
 }
 
+// Storage reports a missing object as 400 with a not_found body about as often
+// as it reports a plain 404, so both have to count as "simply isn't there".
+async function isMissing(res){
+  if (res.status === 404) return true;
+  if (res.status !== 400) return false;
+  const text = await res.clone().text().catch(() => '');
+  return /not[_\s-]?found/i.test(text);
+}
+
+// Returns null when the object does not exist. A photo can legitimately be
+// missing — a row may reference one whose upload has not landed yet — and that
+// must never be treated as a failure, or one absent photo would block all
+// syncing indefinitely.
 export async function downloadObject(path){
   const res = await authed(`/storage/v1/object/${BUCKET}/${path}`);
-  if (res.status === 404) return null;
+  if (await isMissing(res)) return null;
   if (!res.ok) throw await readError(res, 'Could not download a photo');
   return res.blob();
 }
@@ -198,5 +211,5 @@ export async function downloadObject(path){
 export async function removeObject(path){
   const res = await authed(`/storage/v1/object/${BUCKET}/${path}`, { method: 'DELETE' });
   // A photo that is already gone is a success as far as the caller cares.
-  if (!res.ok && res.status !== 404) throw await readError(res, 'Could not remove a photo');
+  if (!res.ok && !(await isMissing(res))) throw await readError(res, 'Could not remove a photo');
 }

@@ -117,8 +117,8 @@ export function onStatus(fn){
   return () => listeners.delete(fn);
 }
 
-function setStatus(state, message, error = null){
-  status = { state, message, error, at: new Date().toISOString() };
+function setStatus(state, message, error = null, note = null){
+  status = { state, message, error, note, at: new Date().toISOString() };
   listeners.forEach(fn => { try{ fn(status); }catch(e){ /* a broken listener must not stall a sync */ } });
 }
 
@@ -210,6 +210,7 @@ async function pullBlobs(userId){
   });
 
   let fetched = 0;
+  let missing = 0;
   for (const { key, has, stamp } of wanted){
     const localStamp = await local.localBlobStamp(key);
     if (!has){
@@ -217,12 +218,20 @@ async function pullBlobs(userId){
       continue;
     }
     if (localStamp && (!stamp || String(localStamp) >= String(stamp))) continue;
-    const blob = await sb.downloadObject(sb.objectPath(userId, key));
-    if (!blob) continue;
-    await local.putBlobFromRemote(key, await blobToDataUrl(blob), stamp || new Date().toISOString());
-    fetched++;
+    try{
+      const blob = await sb.downloadObject(sb.objectPath(userId, key));
+      // Not there yet — the device that owns it may not have finished
+      // uploading. Leave it; a later sync will pick it up.
+      if (!blob){ missing++; continue; }
+      await local.putBlobFromRemote(key, await blobToDataUrl(blob), stamp || new Date().toISOString());
+      fetched++;
+    }catch(err){
+      // One unreadable photo must not abort the sync and strand every other
+      // change behind it.
+      missing++;
+    }
   }
-  return fetched;
+  return { fetched, missing };
 }
 
 /* ── orchestration ──────────────────────────────────────────────────────── */
@@ -244,15 +253,22 @@ export async function sync({ silent = false } = {}){
       const user = sb.currentUser();
       if (!user || !user.id) throw new Error('No signed-in user.');
 
-      const pushedRows = await pushRows(user.id);
+      // Photos go up before the rows that reference them. The reverse order
+      // lets an interrupted sync leave a card on the server claiming a photo
+      // that was never uploaded, which every other device would then hunt for
+      // in vain.
       const pushedBlobs = await pushBlobs(user.id);
+      const pushedRows = await pushRows(user.id);
       const appliedRows = await pullRows();
-      const fetchedBlobs = await pullBlobs(user.id);
+      const { fetched: fetchedBlobs, missing } = await pullBlobs(user.id);
 
       const changed = appliedRows > 0 || fetchedBlobs > 0;
       const moved = pushedRows + pushedBlobs + appliedRows + fetchedBlobs;
-      setStatus('synced', moved ? `Synced · ${moved} change${moved === 1 ? '' : 's'}` : 'Up to date');
-      return { changed, pushedRows, pushedBlobs, appliedRows, fetchedBlobs };
+      setStatus('synced',
+        moved ? `Synced · ${moved} change${moved === 1 ? '' : 's'}` : 'Up to date',
+        null,
+        missing ? `${missing} photo${missing === 1 ? '' : 's'} not uploaded yet` : null);
+      return { changed, pushedRows, pushedBlobs, appliedRows, fetchedBlobs, missingBlobs: missing };
     }catch(err){
       setStatus('error', 'Sync failed', err.message || String(err));
       return { changed: false, error: err };
