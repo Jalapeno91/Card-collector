@@ -3,7 +3,9 @@
 
 const PORT = process.env.LEDGER_PORT || '8765';
 const CDP = process.env.LEDGER_CDP || '9222';
-export const BASE = `http://127.0.0.1:${PORT}/index.html`;
+// LEDGER_URL points the suites at a deployed build instead of the dev server,
+// which is how the production deploy gets smoke-tested.
+export const BASE = process.env.LEDGER_URL || `http://127.0.0.1:${PORT}/index.html`;
 
 export async function connect(){
   const targets = await (await fetch(`http://127.0.0.1:${CDP}/json/list`)).json();
