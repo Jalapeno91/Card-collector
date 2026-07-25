@@ -78,6 +78,24 @@ create index if not exists cards_sync_idx          on public.cards          (use
 create index if not exists subcollections_parent_idx on public.subcollections (user_id, collection_id);
 create index if not exists cards_parent_idx          on public.cards          (user_id, subcollection_id);
 
+/* ── privileges ─────────────────────────────────────────────────────────── */
+
+-- Granted explicitly rather than relying on the project's "automatically
+-- expose new tables" setting, so this schema works with that turned off (which
+-- is what Supabase recommends).
+--
+-- Only `authenticated` is granted anything. The app signs in before it makes a
+-- single REST call, so the anonymous role has no reason to reach these tables;
+-- revoking is belt-and-braces alongside the policies below.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.collections    to authenticated;
+grant select, insert, update, delete on public.subcollections to authenticated;
+grant select, insert, update, delete on public.cards          to authenticated;
+
+revoke all on public.collections    from anon;
+revoke all on public.subcollections from anon;
+revoke all on public.cards          from anon;
+
 /* ── row level security ─────────────────────────────────────────────────── */
 
 alter table public.collections    enable row level security;

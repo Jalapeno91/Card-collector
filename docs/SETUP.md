@@ -13,7 +13,15 @@ a Supabase project, which is free and takes about ten minutes to set up once.
 1. Sign up at [supabase.com](https://supabase.com) and create a new project.
 2. Pick a region near you and set a database password (you won't need it again
    for this app — the app signs in as a normal user, not as the database).
-3. Wait for the project to finish provisioning.
+3. Under **Security**, the Data API options can be left at whatever you prefer:
+
+   | Option | Setting | Why |
+   | --- | --- | --- |
+   | Enable Data API | **on** | Required — the app talks to PostgREST at `/rest/v1/`. |
+   | Automatically expose new tables | either | `schema.sql` grants privileges explicitly, so it works on or off. Off is stricter. |
+   | Enable automatic RLS | **on** (optional) | A safety net for future tables. `schema.sql` enables RLS on its own tables regardless. |
+
+4. Wait for the project to finish provisioning.
 
 ## 2. Create the tables
 
