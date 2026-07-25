@@ -24,6 +24,7 @@ create table if not exists public.collections (
   id              text        not null,
   user_id         uuid        not null default auth.uid() references auth.users(id) on delete cascade,
   name            text        not null default '',
+  publisher       text        not null default '',
   color           text        not null default '#c9a227',
   has_logo        boolean     not null default false,
   logo_updated_at timestamptz,

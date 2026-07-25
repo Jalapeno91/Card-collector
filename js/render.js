@@ -70,6 +70,7 @@ function renderHome(){
       <div class="topbar"></div>
       <div class="body">
         <div class="t-name">${collLogoTag(c, 28)} ${escapeHtml(c.name)}${p.pct===100 && p.total!=null ? ' <span class="badge-complete">✓ Complete</span>' : ''}</div>
+        ${c.publisher ? `<div class="t-publisher">${escapeHtml(c.publisher)}</div>` : ''}
         <div class="t-meta">${c.subcollections.length} series · ${p.total!=null ? p.pct+'% complete' : 'no target set'}</div>
         <div class="bar"><div class="bar-fill" style="width:${p.pct==null?0:p.pct}%"></div></div>
       </div>
@@ -118,6 +119,7 @@ function renderCollection(coll){
 
   main.innerHTML = `
     <div class="crumbs"><span id="crumbHome">All Collections</span><span class="sep">/</span>${escapeHtml(coll.name)}</div>
+    ${coll.publisher ? `<div class="coll-publisher">Published by ${escapeHtml(coll.publisher)}</div>` : ''}
     <h2 class="section-title">${collLogoTag(coll, 32)}${escapeHtml(coll.name)}${p.pct===100 && p.total!=null ? ' <span class="badge-complete">✓ Complete</span>' : ''}
       <div class="header-actions">
         <button class="icon-btn" id="editCollBtn">Edit collection</button>

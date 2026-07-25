@@ -287,3 +287,5 @@
 .reveal-btn:hover{ color:var(--brass); }
 .settings-hint{ font-size:11px; color:var(--parchment-dim); line-height:1.5; margin-top:8px; }
 .build-line{ font-size:10.5px; font-family:'IBM Plex Mono',monospace; color:var(--parchment-dim); text-align:right; margin-top:14px; opacity:.7; }
+.tile .t-publisher{ font-size:11px; font-family:'IBM Plex Mono',monospace; color:var(--parchment-dim); margin-bottom:6px; letter-spacing:.04em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.coll-publisher{ font-size:12px; font-family:'IBM Plex Mono',monospace; color:var(--parchment-dim); margin:-10px 0 14px; }

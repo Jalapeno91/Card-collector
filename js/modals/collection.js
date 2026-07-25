@@ -55,6 +55,7 @@ export function openAddCollection(){
   editing.collId = null;
   el('collModalTitle').textContent = 'New collection';
   el('collName').value = '';
+  el('collPublisher').value = '';
   el('collColor').value = randomColor();
   el('deleteCollBtn').style.display = 'none';
   resetBoxPhotoField();
@@ -69,6 +70,7 @@ export async function openEditCollection(id){
   editing.collId = id;
   el('collModalTitle').textContent = 'Edit collection';
   el('collName').value = c.name;
+  el('collPublisher').value = c.publisher || '';
   el('collColor').value = c.color;
   el('deleteCollBtn').style.display = 'inline-block';
   resetBoxPhotoField();
@@ -91,6 +93,7 @@ el('saveColl').onclick = async () => {
   const name = el('collName').value.trim();
   if (!name){ el('collName').focus(); return; }
   const color = el('collColor').value;
+  const publisher = el('collPublisher').value.trim();
   const collId = editing.collId || uid();
 
   let hasLogo;
@@ -104,10 +107,10 @@ el('saveColl').onclick = async () => {
 
   if (editing.collId){
     const c = getColl(editing.collId);
-    c.name = name; c.color = color;
+    c.name = name; c.color = color; c.publisher = publisher;
     if (hasLogo !== undefined) c.hasLogo = hasLogo;
   } else {
-    data.collections.push({ id: collId, name, color, hasLogo: hasLogo||false, subcollections: [] });
+    data.collections.push({ id: collId, name, publisher, color, hasLogo: hasLogo||false, subcollections: [] });
   }
   await saveData();
   el('collOverlay').classList.remove('open');

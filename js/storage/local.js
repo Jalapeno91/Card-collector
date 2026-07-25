@@ -28,6 +28,7 @@ function collectionRow(c){
   return {
     id: c.id,
     name: c.name,
+    publisher: c.publisher || '',
     color: c.color,
     hasLogo: !!c.hasLogo,
     createdAt: c.createdAt || now(),
@@ -100,6 +101,7 @@ function hydrateTree(rows){
   const collections = live(rows.collections).map(c => ({
     id: c.id,
     name: c.name,
+    publisher: c.publisher || '',
     color: c.color,
     hasLogo: !!c.hasLogo,
     createdAt: c.createdAt,

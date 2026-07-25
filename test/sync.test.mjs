@@ -60,7 +60,7 @@ console.log('\npush');
 await ev(`(async () => {
   const st = await import('/js/state.js');
   const s = await import('/js/store.js');
-  st.data.collections.push({ id:'c1', name:'Paper Bride', color:'#b8594d', hasLogo:false, subcollections:[
+  st.data.collections.push({ id:'c1', name:'Paper Bride', publisher:'Panini', color:'#b8594d', hasLogo:false, subcollections:[
     { id:'s1', name:'Series 1', totalInSet:null, rarities:[{id:'r1',name:'SSR',color:'#8ab6ff',total:3}], hasBoxPhoto:false, cards:[
       { id:'k1', name:'The Weeping Bride', rarity:'SSR', number:2, qty:3, effect:'holo', condition:'Mint', notes:'n', linkedSlots:[] }
     ]}
@@ -80,6 +80,7 @@ check('card values map correctly',
   await ev(`(({name,qty,number,effect,rarity,subcollection_id,user_id,has_photo}) => [name,qty,number,effect,rarity,subcollection_id,user_id,has_photo])(__server.tables.cards[0])`),
   ['The Weeping Bride', 3, 2, 'holo', 'SSR', 's1', 'user-1', true]);
 check('rarities travel as JSON', await ev(`__server.tables.subcollections[0].rarities.map(r=>r.name+':'+r.total)`), ['SSR:3']);
+check('publisher is pushed', await ev(`__server.tables.collections[0].publisher`), 'Panini');
 check('photo lands in the owner folder', await ev(`Object.keys(__server.objects)`), ['user-1/card-photo__k1']);
 check('pushed rows are marked clean',
   await ev(`(async()=>{const l=await import('/js/storage/local.js');const d=await Promise.all(['collections','subcollections','cards'].map(s=>l.dirtyRows(s)));return d.map(x=>x.length);})()`),

@@ -14,6 +14,7 @@ console.log('\ncreate');
 await ev(`document.getElementById('addTileHome').click()`);
 await ev(`document.getElementById('collName').value = 'Paper Bride'`);
 await ev(`document.getElementById('collColor').value = '#b8594d'`);
+await ev(`document.getElementById('collPublisher').value = 'Panini'`);
 await ev(`document.getElementById('saveColl').click()`);
 await wait(400);
 check('collection in memory', await ev(`(await import('/js/state.js')).data.collections.map(c=>c.name)`), ['Paper Bride']);
@@ -23,6 +24,8 @@ console.log('\npersistence');
 await navigate();
 check('collection survives reload', await ev(`(await import('/js/state.js')).data.collections.map(c=>c.name)`), ['Paper Bride']);
 check('theme color survives reload', await ev(`(await import('/js/state.js')).data.collections[0].color`), '#b8594d');
+check('publisher survives reload', await ev(`(await import('/js/state.js')).data.collections[0].publisher`), 'Panini');
+check('publisher shown on the collection tile', await ev(`document.querySelector('.tile[data-coll] .t-publisher')?.textContent`), 'Panini');
 
 console.log('\nseries with rarities');
 await ev(`document.querySelector('.tile[data-coll]').click()`);

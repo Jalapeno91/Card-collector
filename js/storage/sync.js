@@ -17,6 +17,7 @@ const MAPS = {
   collections: {
     id: 'id',
     name: 'name',
+    publisher: 'publisher',
     color: 'color',
     hasLogo: 'has_logo',
     createdAt: 'created_at',
@@ -61,7 +62,7 @@ const MAPS = {
 // Defaults keep a sparse tombstone (which may carry nothing but an id) from
 // tripping a NOT NULL column on the way up.
 const DEFAULTS = {
-  collections: { name: '', color: '#c9a227', has_logo: false },
+  collections: { name: '', publisher: '', color: '#c9a227', has_logo: false },
   subcollections: { name: '', rarities: [], has_box_photo: false, position: 0 },
   cards: { name: '', rarity: '', qty: 0, effect: 'matte', condition: '', notes: '', linked_slots: [], has_photo: false, has_back_photo: false },
 };
