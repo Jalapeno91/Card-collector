@@ -13,6 +13,10 @@ await navigate();
 // A stand-in for PostgREST, GoTrue and Storage, small enough to reason about.
 await ev(`(() => {
   const server = { tables: { collections: [], subcollections: [], cards: [] }, objects: {}, requests: [] };
+  // One clock for the whole server, always moving forward, so stamps order the
+  // way Postgres would regardless of what any device's clock says.
+  let tick = 0;
+  server.clock = () => new Date(Date.now() + (tick++)).toISOString();
   window.__server = server;
   window.fetch = async (url, init = {}) => {
     const u = new URL(url);
@@ -26,11 +30,16 @@ await ev(`(() => {
     if (u.pathname.startsWith('/rest/v1/')) {
       const table = u.pathname.split('/')[3];
       if (method === 'POST') {
-        JSON.parse(init.body).forEach(row => {
-          const i = server.tables[table].findIndex(r => r.id === row.id && r.user_id === row.user_id);
-          if (i >= 0) server.tables[table][i] = row; else server.tables[table].push(row);
+        // Stands in for the stamp_updated_at trigger: the server decides when a
+        // row changed, overriding whatever the device sent, and reports back
+        // what it stored.
+        const stored = JSON.parse(init.body).map(row => {
+          const saved = { ...row, updated_at: server.clock() };
+          const i = server.tables[table].findIndex(r => r.id === saved.id && r.user_id === saved.user_id);
+          if (i >= 0) server.tables[table][i] = saved; else server.tables[table].push(saved);
+          return saved;
         });
-        return new Response('', { status: 201 });
+        return json(stored, 201);
       }
       const since = (u.searchParams.get('updated_at') || '').replace('gt.', '');
       return json(server.tables[table].filter(r => !since || String(r.updated_at) > since));
@@ -198,6 +207,45 @@ check('the locally-kept cards are back on the server',
   ['Kept Locally', 'Photo Never Uploaded']);
 check('deletions are re-uploaded as tombstones, not resurrected',
   await ev(`__server.tables.cards.filter(c=>c.deleted_at).map(c=>c.name).sort()`), ['From The Phone', 'The Weeping Bride']);
+
+console.log('\nthe server owns the change stamp');
+check('a device does not get to choose updated_at', await ev(`(async () => {
+  const sb = await import('/js/storage/supabase.js');
+  const ahead = new Date(Date.now() + 3600000).toISOString();
+  const [saved] = await sb.upsert('cards', [{ id:'k6', user_id:'user-1', subcollection_id:'s1', name:'Stamped By The Server',
+    rarity:'SSR', number:11, qty:1, effect:'matte', condition:'', notes:'', linked_slots:[],
+    has_photo:false, has_back_photo:false, photo_updated_at:null, back_photo_updated_at:null,
+    created_at:ahead, updated_at:ahead, deleted_at:null }]);
+  return saved.updated_at === ahead;
+})()`), false);
+
+console.log('\na watermark poisoned by an old build');
+// The failure this guards against: while devices stamped their own changes, one
+// running fast pushed a stamp in the future, the other device's watermark
+// jumped to it, and every genuine later edit fell behind it — never downloaded
+// again, with sync still reporting success. Upgrading has to undo that, because
+// the bad watermark is already sitting on the device.
+await ev(`(async () => {
+  const l = await import('/js/storage/local.js');
+  await l.meta.set('lastPulledAt', new Date(Date.now() + 3600000).toISOString());
+  await l.meta.set('pullScheme', 1);
+  __server.tables.cards.push({ id:'k7', user_id:'user-1', subcollection_id:'s1', name:'Stranded By The Watermark',
+    rarity:'SSR', number:12, qty:1, effect:'matte', condition:'', notes:'', linked_slots:[],
+    has_photo:false, has_back_photo:false, photo_updated_at:null, back_photo_updated_at:null,
+    created_at:__server.clock(), updated_at:__server.clock(), deleted_at:null });
+  return 1;
+})()`);
+const healed = await ev(`(async () => (await import('/js/storage/sync.js')).sync())()`);
+check('the first sync after upgrading starts over', healed.appliedRows >= 1, true);
+check('an edit stranded behind the watermark arrives',
+  await ev(`(async()=>{const s=await import('/js/store.js');await s.loadData();const st=await import('/js/state.js');
+    return st.data.collections[0].subcollections[0].cards.some(c=>c.name==='Stranded By The Watermark');})()`), true);
+check('and it only starts over once',
+  await ev(`(async()=>(await import('/js/storage/local.js')).meta.get('pullScheme', 1))()`), 2);
+
+console.log('\nre-syncing does not churn');
+const quiet = await ev(`(async () => (await import('/js/storage/sync.js')).sync())()`);
+check('a sync with nothing new applies nothing and reports no change', [quiet.appliedRows, quiet.changed], [0, false]);
 
 console.log('\noffline');
 await ev(`(Object.defineProperty(navigator,'onLine',{value:false,configurable:true}), 1)`);

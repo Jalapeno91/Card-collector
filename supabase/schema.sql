@@ -13,10 +13,11 @@
 --     sync independently and can legitimately arrive out of order; an FK would
 --     turn that into a failed sync instead of a moment of inconsistency that
 --     resolves itself on the next pull.
---   * updated_at is written by the client, because it is the value the
---     last-write-wins merge compares. Devices with automatic clocks agree
---     closely enough; a device with a badly wrong clock would win or lose
---     conflicts unfairly.
+--   * updated_at is stamped here by a trigger, never by the device. It decides
+--     both which edit wins a conflict and which rows a device still needs to
+--     download, so it has to come from one clock. When devices stamped it
+--     themselves, a phone running slightly ahead of a laptop could skip the
+--     laptop's older edits for good, and report a clean sync while doing it.
 
 /* ── tables ─────────────────────────────────────────────────────────────── */
 
@@ -71,6 +72,32 @@ create table if not exists public.cards (
   deleted_at             timestamptz,
   primary key (user_id, id)
 );
+
+/* ── change stamps ──────────────────────────────────────────────────────── */
+
+-- Overrides whatever updated_at the device sent. A device on an older build
+-- still sends its own value and is corrected here, so the two can mix.
+create or replace function public.stamp_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['collections', 'subcollections', 'cards'] loop
+    execute format('drop trigger if exists stamp_updated_at on public.%I', t);
+    execute format(
+      'create trigger stamp_updated_at before insert or update on public.%I
+         for each row execute function public.stamp_updated_at()', t);
+  end loop;
+end $$;
 
 -- The pull query is always "my rows changed since X".
 create index if not exists collections_sync_idx    on public.collections    (user_id, updated_at);

@@ -2,7 +2,7 @@
 
 // Shown in the Sync panel so it is possible to tell, from the outside, whether
 // a device has actually picked up a release. Keep in step with sw.js VERSION.
-export const BUILD = '2026-07-26.2';
+export const BUILD = '2026-07-26.3';
 
 export const EFFECTS = {
   matte:  { label:'Matte',        glyph:'●' },

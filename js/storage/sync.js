@@ -144,8 +144,13 @@ async function pushRows(userId){
     // connection.
     for (let i = 0; i < rows.length; i += 200){
       const chunk = rows.slice(i, i + 200);
-      await sb.upsert(table, chunk.map(r => toRemote(table, r, userId)));
-      await local.markClean(table, chunk.map(r => r.id));
+      const stored = await sb.upsert(table, chunk.map(r => toRemote(table, r, userId)));
+      // Adopt the server's stamp for what we just sent, so this device agrees
+      // with the server about when the row changed and does not treat its own
+      // upload as an incoming change on the next pull.
+      const stamps = new Map();
+      (stored || []).forEach(r => { if (r && r.id && r.updated_at) stamps.set(r.id, r.updated_at); });
+      await local.markClean(table, chunk.map(r => r.id), stamps);
       pushed += chunk.length;
     }
   }
@@ -171,21 +176,49 @@ async function pushBlobs(userId){
 
 /* ── pull ───────────────────────────────────────────────────────────────── */
 
+// Rows are stamped when their transaction starts but only become visible when
+// it commits, so a row can appear with a stamp fractionally older than one this
+// device has already seen. Asking for a little before the watermark covers that
+// gap; re-delivered rows are recognised as unchanged and cost nothing.
+const PULL_OVERLAP_MS = 30 * 1000;
+
+function overlapped(since){
+  if (!since) return null;
+  const t = Date.parse(since);
+  if (Number.isNaN(t)) return since;
+  return new Date(t - PULL_OVERLAP_MS).toISOString();
+}
+
+// A watermark set while devices stamped their own changes may sit in the
+// future, which would keep hiding genuine edits even once the server takes
+// over the stamping. Each device therefore starts from the beginning once, on
+// its first sync after this release. Re-downloading is cheap and silent: rows
+// that have not changed are recognised and skipped.
+const PULL_SCHEME = 2;
+
+async function ensurePullScheme(){
+  const scheme = await local.meta.get('pullScheme', 1);
+  if (scheme >= PULL_SCHEME) return;
+  await local.meta.set('lastPulledAt', null);
+  await local.meta.set('pullScheme', PULL_SCHEME);
+}
+
 async function pullRows(){
+  await ensurePullScheme();
   const since = await local.meta.get('lastPulledAt', null);
   let applied = 0;
   let high = since;
 
   for (const table of local.ROW_STORES){
-    const remote = await sb.selectSince(table, since);
+    const remote = await sb.selectSince(table, overlapped(since));
     for (const r of remote){
       if (!high || String(r.updated_at) > String(high)) high = r.updated_at;
       if (await local.applyRemoteRow(table, fromRemote(table, r))) applied++;
     }
   }
 
-  // Advance the watermark using the newest stamp the *server* reported, so a
-  // device with a skewed clock doesn't skip rows it never saw.
+  // The watermark only ever holds a stamp the server wrote, so it stays on the
+  // server's clock and no device's clock can push it out of reach of another's.
   if (high && high !== since) await local.meta.set('lastPulledAt', high);
   return applied;
 }

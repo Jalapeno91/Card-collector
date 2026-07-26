@@ -115,6 +115,14 @@ periodically for a snapshot you can actually roll back to.
 | `relation "public.cards" does not exist` | Step 2 didn't run. Re-run `schema.sql`. |
 | `new row violates row-level security policy` | The schema ran but policies didn't. Re-run `schema.sql` in full. |
 | Photos don't appear on the other device | The `card-photos` bucket is missing — re-run `schema.sql`. |
+| Some edits never reach the other device, but sync says it succeeded | The project predates `supabase/migrations/002-server-stamped-updated-at.sql`. Run it, then open the app once on each device. |
+
+## Updating an existing project
+
+`schema.sql` is what a new project needs. A project set up earlier can be
+brought up to date by running the files in [`../supabase/migrations/`](../supabase/migrations/)
+in order, in the **SQL Editor**. Each one is safe to run twice, and safe to run
+on a project that already has the change.
 
 ## Moving off Supabase later
 

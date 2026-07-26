@@ -19,7 +19,7 @@ does need to be served over `http(s)` rather than opened as a `file://` URL,
 because ES modules and service workers both require an origin.
 
 ```sh
-npm test         # 44 checks in headless Chrome
+npm test         # 63 checks in headless Chrome
 npm run icons    # regenerate the PWA icons from scripts/make-icons.mjs
 ```
 
@@ -39,6 +39,12 @@ all survive; the same card edited on two devices at once resolves to the later
 edit rather than merging field by field. That is the honest trade for a
 single-user app that stays this simple — see `js/storage/sync.js`, which says so
 in more detail.
+
+"Later" is decided by the server, not by the device that made the edit. A device
+also asks only for rows changed since the newest change it has already seen, so
+that stamp has to come from one clock: when devices stamped their own, one
+running fast could leave another permanently blind to the first's earlier edits,
+while still reporting a successful sync.
 
 ## Layout
 
@@ -62,6 +68,7 @@ js/
   lib/idb.js             promise wrapper over IndexedDB
 sw.js                    offline app shell
 supabase/schema.sql      tables, row-level security, storage bucket
+supabase/migrations/     changes to apply to a project created earlier
 test/                    headless-Chrome suites, no test framework
 scripts/                 dev server, icon generator
 ```

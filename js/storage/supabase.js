@@ -158,17 +158,21 @@ export async function selectSince(table, since){
   return res.json();
 }
 
+// Returns the rows as the server stored them. Worth the larger reply: the
+// server decides updated_at, and the device needs to record what it chose.
 export async function upsert(table, rows){
-  if (!rows.length) return;
+  if (!rows.length) return [];
   const res = await authed(`/rest/v1/${table}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=minimal',
+      Prefer: 'resolution=merge-duplicates,return=representation',
     },
     body: JSON.stringify(rows),
   });
   if (!res.ok) throw await readError(res, `Could not save ${table}`);
+  try{ return await res.json(); }
+  catch(e){ return []; }
 }
 
 /* ── Storage ────────────────────────────────────────────────────────────── */

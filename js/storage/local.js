@@ -132,11 +132,23 @@ function hydrateTree(rows){
   return { collections };
 }
 
+// Key order is not meaningful, but JSON.stringify preserves it, so two equal
+// rows built by different code paths — or round-tripped through the server's
+// JSON columns — would otherwise compare as different.
+function stableStringify(value){
+  if (Array.isArray(value)) return '[' + value.map(stableStringify).join(',') + ']';
+  if (value && typeof value === 'object'){
+    return '{' + Object.keys(value).sort()
+      .map(k => JSON.stringify(k) + ':' + stableStringify(value[k])).join(',') + '}';
+  }
+  return JSON.stringify(value === undefined ? null : value);
+}
+
 // The fields a diff should notice. Sync bookkeeping is deliberately excluded so
 // a pull that only refreshes `updatedAt` doesn't look like a local edit.
 function comparable(row){
   const { updatedAt, deletedAt, dirty, ...rest } = row;
-  return JSON.stringify(rest);
+  return stableStringify(rest);
 }
 
 /* ── blob keys ──────────────────────────────────────────────────────────── */
@@ -252,12 +264,16 @@ export async function dirtyBlobs(){
   return all.filter(b => b.dirty);
 }
 
-export async function markClean(store, ids){
+// `stamps` maps row id to the updated_at the server recorded. Adopting it keeps
+// this device's idea of when a row changed identical to the server's.
+export async function markClean(store, ids, stamps){
   if (!ids.length) return;
   const rows = [];
   for (const id of ids){
     const row = await idb.get(store, id);
-    if (row) rows.push({ ...row, dirty: 0 });
+    if (!row) continue;
+    const stamp = stamps && stamps.get(id);
+    rows.push({ ...row, dirty: 0, updatedAt: stamp || row.updatedAt });
   }
   await idb.putMany(store, rows);
 }
@@ -272,6 +288,12 @@ export async function markBlobClean(key){
 export async function applyRemoteRow(store, row){
   const local = await idb.get(store, row.id);
   if (local && local.dirty && String(local.updatedAt) > String(row.updatedAt)) return false;
+  // Already holding exactly this row — usually one re-delivered by the pull's
+  // overlap window. Writing it again would be reported as an incoming change
+  // and reload the views for nothing.
+  if (local && !local.dirty
+      && String(local.updatedAt) === String(row.updatedAt)
+      && comparable(local) === comparable(row)) return false;
   await idb.put(store, { ...row, dirty: 0 });
   return true;
 }
@@ -297,10 +319,15 @@ export async function dropBlobRecord(key){
 // Marks every local row and photo as unsent, so the next sync pushes the whole
 // device up. The escape hatch for "this device has the copy I want to keep" —
 // after switching accounts, or recovering from a server-side mess.
+//
+// The stamps move forward too. Sending rows back up under their original dates
+// used to leave them older than what the other device had already downloaded,
+// so the other device ignored every one of them and the button did nothing.
 export async function markAllDirty(){
+  const stamp = now();
   for (const store of ROW_STORES){
     const rows = await idb.getAll(store);
-    if (rows.length) await idb.putMany(store, rows.map(r => ({ ...r, dirty: 1 })));
+    if (rows.length) await idb.putMany(store, rows.map(r => ({ ...r, dirty: 1, updatedAt: stamp })));
   }
   const blobs = await idb.getAll('blobs');
   if (blobs.length) await idb.putMany('blobs', blobs.map(b => ({ ...b, dirty: 1 })));
