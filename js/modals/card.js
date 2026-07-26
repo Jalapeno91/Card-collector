@@ -1,4 +1,5 @@
 import { el, uid, escapeHtml, showToast, readImageFile, EFFECTS } from '../ui.js';
+import { startScan } from '../scan.js';
 import { data, editing, getColl, getSub, getCard, getSortedCollections } from '../state.js';
 import { saveData, getBlob, setBlob, deleteBlob, photoKey, photoBackKey } from '../store.js';
 import { openConfirm } from './confirm.js';
@@ -13,19 +14,30 @@ let pendingBack = { dataUrl: null, remove: false };
 
 // Front and back behave identically, so both sides are driven from one table.
 const PHOTO_FIELDS = [
-  { input:'fPhotoInput',     preview:'fPhotoPreview',     removeBtn:'removePhotoBtn',     get:() => pendingFront, set:v => { pendingFront = v; } },
-  { input:'fPhotoBackInput', preview:'fPhotoBackPreview', removeBtn:'removePhotoBackBtn', get:() => pendingBack,  set:v => { pendingBack = v; } },
+  { input:'fPhotoInput',     scanBtn:'scanPhotoBtn',     preview:'fPhotoPreview',     removeBtn:'removePhotoBtn',     get:() => pendingFront, set:v => { pendingFront = v; } },
+  { input:'fPhotoBackInput', scanBtn:'scanPhotoBackBtn', preview:'fPhotoBackPreview', removeBtn:'removePhotoBackBtn', get:() => pendingBack,  set:v => { pendingBack = v; } },
 ];
 
 PHOTO_FIELDS.forEach(field => {
+  // A scanned photo joins the same pending-photo queue as a picked one, so
+  // saving, replacing and syncing need to know nothing about where it came from.
+  function accept(dataUrl){
+    field.set({ dataUrl, remove: false });
+    el(field.preview).style.backgroundImage = `url(${dataUrl})`;
+    el(field.removeBtn).style.display = 'inline-block';
+  }
+
+  el(field.scanBtn).onclick = () => startScan(dataUrl => {
+    accept(dataUrl);
+    showToast('Card scanned');
+  });
+
   el(field.input).onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     try{
       const { dataUrl } = await readImageFile(file, 900);
-      field.set({ dataUrl, remove: false });
-      el(field.preview).style.backgroundImage = `url(${dataUrl})`;
-      el(field.removeBtn).style.display = 'inline-block';
+      accept(dataUrl);
     }catch(err){ showToast(err.message); }
   };
   el(field.removeBtn).onclick = () => {

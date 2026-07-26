@@ -289,3 +289,24 @@
 .build-line{ font-size:10.5px; font-family:'IBM Plex Mono',monospace; color:var(--parchment-dim); text-align:right; margin-top:14px; opacity:.7; }
 .tile .t-publisher{ font-size:11px; font-family:'IBM Plex Mono',monospace; color:var(--parchment-dim); margin-bottom:6px; letter-spacing:.04em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .coll-publisher{ font-size:12px; font-family:'IBM Plex Mono',monospace; color:var(--parchment-dim); margin:-10px 0 14px; }
+
+/* ── Scan card ──────────────────────────────────────────────────────────── */
+
+.btn-scan{ width:100%; margin-bottom:8px; padding:11px 14px; background:rgba(201,162,39,.10); border:1px solid var(--brass); color:var(--brass); border-radius:var(--radius); cursor:pointer; font-size:14px; font-family:inherit; }
+.btn-scan:hover{ background:rgba(201,162,39,.18); }
+
+/* Above the modals it is launched from, and full-bleed: the photo wants every
+   pixel, and corner handles near a screen edge need room to be grabbed. */
+.scan-overlay{ position:fixed; inset:0; background:#0c0e14; z-index:80; display:none; flex-direction:column; padding:max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)); }
+.scan-overlay.open{ display:flex; }
+.scan-hint{ text-align:center; font-size:13px; color:var(--parchment-dim); font-family:'IBM Plex Mono',monospace; padding:8px 6px 10px; line-height:1.4; }
+.scan-stage{ flex:1; min-height:0; position:relative; }
+/* touch-action:none stops the browser panning the page mid-drag, which would
+   otherwise steal every corner adjustment on a phone. */
+.scan-stage canvas{ position:absolute; inset:0; touch-action:none; }
+.scan-actions{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; padding-top:12px; }
+.scan-actions button{ flex:1 1 auto; min-width:88px; }
+
+@media (max-width:560px){
+  .scan-actions button{ padding:12px 10px; font-size:13px; }
+}

@@ -19,7 +19,7 @@ does need to be served over `http(s)` rather than opened as a `file://` URL,
 because ES modules and service workers both require an origin.
 
 ```sh
-npm test         # 63 checks in headless Chrome
+npm test         # 84 checks in headless Chrome
 npm run icons    # regenerate the PWA icons from scripts/make-icons.mjs
 ```
 
@@ -60,12 +60,14 @@ js/
   viewer.js              the 3D card viewer
   backup.js              export / import
   sync-ui.js             the sync settings modal and status pill
+  scan.js                "Scan card": the camera and crop screen
   modals/                collection, series, card, confirm
   storage/
     local.js             IndexedDB, tree ⇄ flat rows, the dirty-diff
     supabase.js          hand-rolled Supabase REST client
     sync.js              push / pull / conflict resolution
   lib/idb.js             promise wrapper over IndexedDB
+  lib/scan-detect.js     card-edge detection and perspective correction
 sw.js                    offline app shell
 supabase/schema.sql      tables, row-level security, storage bucket
 supabase/migrations/     changes to apply to a project created earlier
@@ -83,6 +85,24 @@ against a shadow snapshot of what was last written, and stamps only the rows
 that actually changed. That is what lets two devices merge card by card instead
 of overwriting each other's whole document — without any view code needing to
 know that sync exists.
+
+## Scanning a card
+
+**Scan card with camera**, on either photo field, opens the phone's own camera.
+The photo that comes back goes through `js/lib/scan-detect.js`, which shrinks
+it, finds the pixels where brightness changes sharply, works out which straight
+lines those pixels lie on, and picks the four that box in the most convincing
+card-shaped region. The card is then straightened out of the photo — corners
+pulled square, perspective removed — and stored like any other card photo.
+
+Detection is a guess, so the four corners are always shown as draggable handles
+over the photo. A wrong guess costs a nudge rather than a retake, and a photo it
+cannot read at all still opens with a card-shaped box ready to be dragged into
+place.
+
+This is written out by hand rather than pulled from an image library, because a
+library would mean the first build step, the first dependency, and several
+megabytes added to an app that is meant to install and run offline.
 
 ## Deploying
 

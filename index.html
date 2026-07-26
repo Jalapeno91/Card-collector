@@ -144,6 +144,7 @@
     </div>
     <div class="field">
       <label>Card photo — front (optional — shown in the 3D viewer instead of the generated design)</label>
+      <button type="button" class="btn-scan" id="scanPhotoBtn">⛶ Scan card with camera</button>
       <input id="fPhotoInput" type="file" accept="image/*" />
       <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
         <div id="fPhotoPreview" style="width:56px; height:78px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0;"></div>
@@ -152,6 +153,7 @@
     </div>
     <div class="field">
       <label>Card photo — back (optional — flip the 3D viewer to see it)</label>
+      <button type="button" class="btn-scan" id="scanPhotoBackBtn">⛶ Scan card with camera</button>
       <input id="fPhotoBackInput" type="file" accept="image/*" />
       <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
         <div id="fPhotoBackPreview" style="width:56px; height:78px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0;"></div>
@@ -231,6 +233,22 @@
     <div class="notes" id="vNotes"></div>
   </div>
 </div>
+
+<div class="scan-overlay" id="scanOverlay">
+  <div class="scan-hint" id="scanHint">Finding the card…</div>
+  <div class="scan-stage" id="scanStage">
+    <canvas id="scanCanvas"></canvas>
+  </div>
+  <div class="scan-actions">
+    <button type="button" class="btn-ghost" id="scanCancel">Cancel</button>
+    <button type="button" class="btn-ghost" id="scanRetake">Retake</button>
+    <button type="button" class="btn-ghost" id="scanReset">Auto-fit</button>
+    <button type="button" class="btn-primary" id="scanUse">Use this crop</button>
+  </div>
+</div>
+<!-- capture="environment" asks the phone for its back camera; desktop browsers
+     ignore it and offer a normal file picker, which is a fine second best. -->
+<input id="scanCaptureInput" type="file" accept="image/*" capture="environment" style="display:none;" />
 
 <canvas id="colorCanvas" width="60" height="60" style="display:none;"></canvas>
 <div class="toast" id="toast"></div>
