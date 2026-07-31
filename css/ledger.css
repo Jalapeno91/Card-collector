@@ -110,7 +110,7 @@
   .btn-ghost.danger{ color:var(--rose); border-color:var(--rose); }
   .btn-ghost.danger:hover{ background: rgba(184,89,77,.12); }
 
-  .effect-picker{ display:grid; grid-template-columns: repeat(4,1fr); gap:8px; }
+  .effect-picker{ display:grid; grid-template-columns: repeat(auto-fill, minmax(104px,1fr)); gap:8px; }
   .effect-opt{ border:1px solid var(--hairline); border-radius:var(--radius); padding:10px 6px; text-align:center; cursor:pointer; font-size:12px; color:var(--parchment-dim); }
   .effect-opt .glyph{ font-size:17px; display:block; margin-bottom:4px; }
   .effect-opt:hover{ border-color:var(--parchment-dim); color:var(--parchment); }
@@ -176,9 +176,12 @@
   .slot-chip:hover{ transform: scale(1.12); }
   .slot-chip.empty{ background:transparent; border:1px dashed var(--hairline); color:var(--parchment-dim); }
   .slot-chip.filled{ font-weight:700; }
-  .binder-pager{ display:flex; align-items:center; justify-content:center; gap:16px; margin-top:16px; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--parchment-dim); }
+  .binder-pager{ display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px; margin-top:16px; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--parchment-dim); }
   .binder-pager button{ background:var(--panel); border:1px solid var(--hairline); color:var(--parchment); padding:7px 14px; border-radius:var(--radius); cursor:pointer; }
   .binder-pager button:disabled{ opacity:.35; cursor:default; }
+  /* Jump-to-end buttons sit a step quieter than Prev/Next, which stay the
+     ones you reach for page to page. */
+  .binder-pager button.edge{ padding:7px 10px; color:var(--parchment-dim); }
 
   .viewer-overlay{ position:fixed; inset:0; background:rgba(8,9,14,.88); display:none; align-items:center; justify-content:center; z-index:80; flex-direction:column; padding:20px;}
   .viewer-overlay.open{ display:flex; }
@@ -194,6 +197,37 @@
   .c-fx{ position:absolute; inset:0; pointer-events:none; }
   .fx-matte{ background: repeating-linear-gradient(45deg, rgba(255,255,255,.045) 0 2px, transparent 2px 7px); opacity:.5; }
   .fx-shiny{ background: radial-gradient(circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,.9), rgba(255,255,255,0) 42%); mix-blend-mode: overlay; opacity:.9; }
+  /* Gold foil: warm bands over a fine brushed grain, plus a hotspot that
+     follows the pointer.
+     Band stops are in pixels rather than percentages, so the grain stays the
+     same size on a phone and a desktop. The bands sit on an oversized layer
+     moved by `transform`, not `background-position`, because shifting a
+     repeating gradient inside its own box leaves a visible tiling seam. And
+     `.fx-gold` itself carries no blend mode or opacity — either one would make
+     it isolate, and the layers below would blend against each other instead of
+     against the card. */
+  .fx-gold::before{
+    content:''; position:absolute; inset:-70px;
+    background:
+      repeating-linear-gradient(12deg,
+        rgba(255,255,255,.13) 0 1px, rgba(0,0,0,.13) 1px 3px),
+      repeating-linear-gradient(calc(102deg + var(--ry,0)*0.5deg),
+        rgba(64,40,6,.42)     0px,
+        rgba(158,110,30,.34) 16px,
+        rgba(255,226,152,.62) 30px,
+        rgba(255,248,226,.72) 36px,
+        rgba(255,226,152,.62) 42px,
+        rgba(158,110,30,.34) 56px,
+        rgba(64,40,6,.42)    72px);
+    transform: translate(calc(var(--ry,0)*3px), calc(var(--rx,0)*3px));
+    mix-blend-mode: hard-light; opacity:.55;
+  }
+  .fx-gold::after{
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(circle at var(--mx,50%) var(--my,50%),
+      rgba(255,246,214,.55), rgba(255,214,130,.14) 22%, transparent 44%);
+    mix-blend-mode: screen;
+  }
   .fx-holo{
     background: repeating-linear-gradient(calc(115deg + var(--ry,0)*1deg),
       rgba(255,80,170,.4) 0%, rgba(255,225,60,.4) 12%, rgba(90,255,200,.4) 24%,
@@ -259,6 +293,13 @@
   .view-toggle{ flex:1; }
   .view-toggle button{ flex:1; padding:9px 6px; }
   .binder-page{ grid-template-columns:repeat(2,1fr); gap:12px; padding:14px; }
+  /* Five items won't sit on one narrow row, and letting them wrap where they
+     fall strands "Page 2 of 5" mid-row. Lift it onto its own line, then let
+     the four buttons share what's left evenly so they stay on one row however
+     narrow the screen is. */
+  .binder-pager{ gap:8px; }
+  .binder-pager span{ order:-1; flex-basis:100%; text-align:center; }
+  .binder-pager button, .binder-pager button.edge{ flex:1 1 0; min-width:0; padding:7px 4px; white-space:nowrap; }
   .field-row{ flex-wrap:wrap; }
   .field-row .field{ flex:1 1 120px; }
   .modal{ padding:22px 18px 18px; }

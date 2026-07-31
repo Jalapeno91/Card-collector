@@ -348,9 +348,11 @@ function renderBinderView(coll, sub){
   wrap.innerHTML = `
     <div class="binder-page">${pockets}</div>
     <div class="binder-pager">
+      <button id="binderFirst" class="edge" title="First page" ${view.binderPage===0?'disabled':''}>« First</button>
       <button id="binderPrev" ${view.binderPage===0?'disabled':''}>‹ Prev</button>
       <span>Page ${view.binderPage+1} of ${totalPages}</span>
       <button id="binderNext" ${view.binderPage>=totalPages-1?'disabled':''}>Next ›</button>
+      <button id="binderLast" class="edge" title="Last page" ${view.binderPage>=totalPages-1?'disabled':''}>Last »</button>
     </div>
   `;
 
@@ -365,8 +367,10 @@ function renderBinderView(coll, sub){
   wrap.querySelectorAll('.pocket.linked-pocket').forEach(p => {
     p.onclick = () => goToLinkedCard(p.dataset.linkedColl, p.dataset.linkedSub, p.dataset.linkedCard);
   });
+  const firstBtn = el('binderFirst'); if (firstBtn) firstBtn.onclick = () => { view.binderPage = 0; renderBinderView(coll, sub); };
   const prevBtn = el('binderPrev'); if (prevBtn) prevBtn.onclick = () => { view.binderPage--; renderBinderView(coll, sub); };
   const nextBtn = el('binderNext'); if (nextBtn) nextBtn.onclick = () => { view.binderPage++; renderBinderView(coll, sub); };
+  const lastBtn = el('binderLast'); if (lastBtn) lastBtn.onclick = () => { view.binderPage = totalPages-1; renderBinderView(coll, sub); };
 
   pageSlots.filter(s => s.card && s.card.hasPhoto).forEach(s => {
     getBlob(photoKey(s.card.id)).then(value => {
