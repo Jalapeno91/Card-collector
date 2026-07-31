@@ -290,8 +290,13 @@
   .sidebar{ padding:20px 0 14px; }
   .toolbar{ flex-wrap:wrap; }
   .toolbar .search{ flex-basis:100%; }
-  .view-toggle{ flex:1; }
-  .view-toggle button{ flex:1; padding:9px 6px; }
+  /* Four view buttons no longer share a row with the filter and Add card
+     without the last of them being clipped, so the switcher takes its own
+     line below them. */
+  .view-toggle{ flex:1 1 100%; order:3; }
+  /* min-width:0 so a fourth label can shrink instead of being clipped by the
+     switcher's own overflow:hidden on the narrowest phones. */
+  .view-toggle button{ flex:1; min-width:0; padding:9px 6px; }
   .binder-page{ grid-template-columns:repeat(2,1fr); gap:12px; padding:14px; }
   /* Five items won't sit on one narrow row, and letting them wrap where they
      fall strands "Page 2 of 5" mid-row. Lift it onto its own line, then let
@@ -350,4 +355,144 @@
 
 @media (max-width:560px){
   .scan-actions button{ padding:12px 10px; font-size:13px; }
+}
+
+/* ── Album: the binder as a binder ──────────────────────────────────────── */
+
+/* An open book of translucent pocket pages. The left page is a leaf seen from
+   behind, so it carries card backs; the right page carries fronts. */
+
+.album{ perspective: 2600px; }
+.album-book{
+  --spine: 26px;
+  display:flex; align-items:stretch; position:relative;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 18px 34px rgba(0,0,0,.55));
+}
+.album-side{ flex:1 1 0; min-width:0; position:relative; }
+/* The gutter: pages darken as they curve into the spine. */
+.album-side::after{
+  content:''; position:absolute; inset:0; pointer-events:none; z-index:2;
+}
+.album-left::after{ background: linear-gradient(90deg, transparent 72%, rgba(0,0,0,.55)); }
+.album-right::after{ background: linear-gradient(270deg, transparent 72%, rgba(0,0,0,.55)); }
+
+.album-leaf{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:16px;
+  background:
+    linear-gradient(158deg, rgba(216,224,240,.085), rgba(216,224,240,.02) 42%, rgba(216,224,240,.06));
+  border:1px solid rgba(255,255,255,.07);
+  box-shadow: inset 0 0 44px rgba(255,255,255,.028);
+}
+.album-left .album-leaf, .album-left .album-cover{ border-radius:10px 2px 2px 10px; }
+.album-right .album-leaf, .album-right .album-cover{ border-radius:2px 10px 10px 2px; }
+
+/* The plastic pocket. The card sits inset behind a glossy sheet with a lip
+   across the top, which is what sells it as a sleeve rather than a border. */
+.sleeve{ position:relative; aspect-ratio:2.5/3.5; border-radius:5px; cursor:default; transition: transform .14s ease; }
+.sleeve[data-id], .sleeve[data-linked-card]{ cursor:pointer; }
+.sleeve[data-id]:hover, .sleeve[data-linked-card]:hover{ transform: translateY(-3px); }
+.sleeve-card{ position:absolute; inset:3px; border-radius:3px; overflow:hidden; background:rgba(0,0,0,.32); }
+.sleeve-plastic{
+  position:absolute; inset:0; border-radius:5px; pointer-events:none;
+  background: linear-gradient(118deg,
+    rgba(255,255,255,.20) 0%, rgba(255,255,255,.06) 14%,
+    rgba(255,255,255,0) 30%, rgba(255,255,255,0) 58%,
+    rgba(255,255,255,.09) 72%, rgba(255,255,255,.02) 86%, rgba(255,255,255,0) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.13),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    0 3px 8px rgba(0,0,0,.45);
+}
+.sleeve-plastic::before{
+  content:''; position:absolute; left:5%; right:5%; top:6px; height:1px;
+  background:rgba(255,255,255,.18);
+}
+
+/* The binder's pocket styles assume a footer strip under each card; inside a
+   sleeve the card fills the pocket edge to edge instead. */
+.sleeve .pocket-face{
+  position:absolute; inset:0; border-bottom:0;
+  display:flex; align-items:center; justify-content:center;
+  background-size:cover; background-position:center;
+}
+.sleeve .pocket-face.vacant{
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0 6px, transparent 6px 12px);
+}
+.sleeve .pocket-mono{ font-size:26px; }
+.card-back-mark{
+  width:44%; aspect-ratio:1; border-radius:50%;
+  border:1px solid rgba(255,255,255,.3);
+  box-shadow: inset 0 0 0 4px rgba(255,255,255,.05);
+}
+/* Only a generated back gets the printed pattern — a real back photo is
+   already a picture of the card and wants nothing laid over it. */
+.card-back.generated::after{
+  content:''; position:absolute; inset:0;
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 3px, transparent 3px 9px);
+}
+
+.album-spine{
+  width:var(--spine); flex:0 0 var(--spine); position:relative; z-index:3;
+  display:flex; flex-direction:column; justify-content:space-evenly; align-items:center;
+  background: linear-gradient(90deg, rgba(0,0,0,.6), rgba(255,255,255,.05) 46%, rgba(255,255,255,.05) 54%, rgba(0,0,0,.6));
+}
+/* Rings, not dots: a metal-toned ring is drawn in the border while the middle
+   stays transparent, so the gutter shows through the way it does on a real
+   binder. */
+.album-spine i{
+  width:19px; height:19px; border-radius:50%;
+  border:3px solid transparent;
+  background:
+    linear-gradient(transparent, transparent) padding-box,
+    linear-gradient(150deg, #eef2f8, #767e8e 42%, #d3dae6 68%, #4d5464) border-box;
+  box-shadow: 0 1px 3px rgba(0,0,0,.7);
+}
+
+.album-cover{
+  height:100%; display:flex; align-items:center; justify-content:center; padding:24px;
+  background: linear-gradient(150deg, #262b38, #171a23);
+  border:1px solid rgba(255,255,255,.06);
+}
+.album-cover-plate{ text-align:center; padding:22px 26px; border:1px solid rgba(201,162,39,.32); border-radius:6px; }
+.album-cover-eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--parchment-dim); }
+.album-cover-title{ font-family:'Fraunces',serif; font-size:20px; color:var(--parchment); margin-top:8px; }
+.album-cover-note{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--parchment-dim); margin-top:10px; opacity:.75; }
+
+/* The turning leaf. Duration must match TURN_MS in js/album.js — the script
+   waits on transitionend but falls back to a timer of its own. */
+.album-turn{
+  position:absolute; top:0; z-index:5;
+  width: calc((100% - var(--spine)) / 2);
+  transform-style: preserve-3d;
+  transition: transform 620ms cubic-bezier(.36,.02,.28,1);
+}
+.album-turn.from-right{ right:0; transform-origin: left center; transform: rotateY(0deg); }
+.album-turn.from-right.turned{ transform: rotateY(-180deg); }
+.album-turn.from-left{ left:0; transform-origin: right center; transform: rotateY(0deg); }
+.album-turn.from-left.turned{ transform: rotateY(180deg); }
+.album-turn-face{ position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; }
+.album-turn-face.b{ transform: rotateY(180deg); }
+
+.album-flip{ display:none; }
+
+@media (max-width:800px){
+  /* A full spread on a phone makes each card about a fingernail wide, so one
+     page fills the screen and a button turns the leaf over to see its backs. */
+  .album-book{ --spine: 0px; }
+  .album-spine{ display:none; }
+  .album[data-side="right"] .album-left{ display:none; }
+  .album[data-side="left"] .album-right{ display:none; }
+  .album-side::after{ display:none; }
+  .album-leaf{ gap:8px; padding:10px; }
+  .album-left .album-leaf, .album-left .album-cover,
+  .album-right .album-leaf, .album-right .album-cover{ border-radius:8px; }
+  .album-turn{ width:100%; }
+  .binder-pager .album-flip{ display:block; flex:1 1 100%; }
+}
+@media (hover:none){
+  .sleeve[data-id]:hover, .sleeve[data-linked-card]:hover{ transform:none; }
+}
+@media (prefers-reduced-motion: reduce){
+  .album-turn{ transition:none; }
 }

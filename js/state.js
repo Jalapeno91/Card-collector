@@ -14,6 +14,10 @@ export const view = {
   mode: 'ledger',
   binderPage: 0,
   lastBinderSubId: null,
+  albumSpread: 0,
+  // Which half of the open album a phone is looking at, since a full spread
+  // does not fit. Desktop shows both and ignores this.
+  albumMobileSide: 'right',
 };
 
 export function setData(next){

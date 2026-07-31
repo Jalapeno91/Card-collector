@@ -1,7 +1,8 @@
 # The Ledger
 
 A private archive for a card collection: collections, series, rarities, binder
-pages, and a 3D card viewer with holographic and lenticular effects.
+pages, an album that turns like a real binder, and a 3D card viewer with
+holographic, gold foil and lenticular effects.
 
 It installs to a phone or desktop as a PWA, works fully offline, and optionally
 syncs across devices through a Supabase project you own.
@@ -58,6 +59,7 @@ js/
   store.js               the storage facade the views talk to
   render.js              all view rendering
   viewer.js              the 3D card viewer
+  album.js               the binder drawn as a binder — pocket pages that turn
   backup.js              export / import
   sync-ui.js             the sync settings modal and status pill
   scan.js                "Scan card": the camera and crop screen

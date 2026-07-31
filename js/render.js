@@ -8,6 +8,7 @@ import {
   buildBinderSlots, collProgress, subProgress,
 } from './state.js';
 import { getBlob, logoKey, boxPhotoKey, photoKey } from './store.js';
+import { renderAlbumView } from './album.js';
 import { openAddCollection, openEditCollection, confirmDeleteCollection } from './modals/collection.js';
 import { openAddSubcollection, openEditSubcollection, confirmDeleteSubcollection } from './modals/series.js';
 import { openAddCard, openEditCard, confirmDeleteCard } from './modals/card.js';
@@ -204,6 +205,7 @@ function renderSubcollection(coll, sub){
       <div class="view-toggle">
         <button data-mode="ledger" class="${view.mode==='ledger'?'active':''}">Ledger</button>
         <button data-mode="binder" class="${view.mode==='binder'?'active':''}">Binder</button>
+        <button data-mode="album" class="${view.mode==='album'?'active':''}">Album</button>
         <button data-mode="overview" class="${view.mode==='overview'?'active':''}">Overview</button>
       </div>
       <button class="btn-primary" id="openAddCard">+ Add card</button>
@@ -232,7 +234,7 @@ function renderSubcollection(coll, sub){
   el('openAddCard').onclick = () => openAddCard(coll.id, sub.id);
 
   main.querySelectorAll('.view-toggle button').forEach(b => {
-    b.onclick = () => { view.mode = b.dataset.mode; view.binderPage = 0; renderSubcollection(coll, sub); };
+    b.onclick = () => { view.mode = b.dataset.mode; view.binderPage = 0; view.albumSpread = 0; renderSubcollection(coll, sub); };
   });
 
   renderContent(coll, sub);
@@ -240,6 +242,7 @@ function renderSubcollection(coll, sub){
 
 function renderContent(coll, sub){
   if (view.mode === 'binder') renderBinderView(coll, sub);
+  else if (view.mode === 'album') renderAlbumView(coll, sub);
   else if (view.mode === 'overview') renderOverviewView(coll, sub);
   else renderLedgerRows(coll, sub);
 }

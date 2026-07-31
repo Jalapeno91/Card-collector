@@ -6,7 +6,7 @@
 
 // Bump on every release. The activate step deletes caches that don't match, so
 // changing this is what forces a device onto the new files.
-const VERSION = 'ledger-2026-07-31.2';
+const VERSION = 'ledger-2026-07-31.3';
 const SHELL = [
   './',
   'index.html',
@@ -17,6 +17,7 @@ const SHELL = [
   'js/store.js',
   'js/render.js',
   'js/viewer.js',
+  'js/album.js',
   'js/backup.js',
   'js/sync-ui.js',
   'js/scan.js',
