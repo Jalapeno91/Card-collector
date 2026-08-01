@@ -4,7 +4,7 @@
 import { el, escapeHtml, applyTheme, resetTheme, EFFECTS } from './ui.js';
 import {
   data, nav, view,
-  getColl, getSub, getSortedCollections, getFilteredCards,
+  getColl, getSub, getSortedCollections, getFilteredCards, setLedgerSort,
   buildBinderSlots, collProgress, subProgress,
 } from './state.js';
 import { getBlob, logoKey, boxPhotoKey, photoKey } from './store.js';
@@ -239,7 +239,7 @@ function renderSubcollection(coll, sub){
   const ls = el('ledgerSort');
   if (ls){
     ls.value = view.ledgerSort;
-    ls.onchange = () => { view.ledgerSort = ls.value; renderContent(coll, sub); };
+    ls.onchange = () => { setLedgerSort(ls.value); renderContent(coll, sub); };
   }
   el('searchInput').oninput = (e) => { view.ledgerSearch = e.target.value; renderContent(coll, sub); };
   el('openAddCard').onclick = () => openAddCard(coll.id, sub.id);

@@ -7,12 +7,48 @@ export let data = { collections: [] };
 export const nav = { collectionId: null, subId: null };
 export const editing = { collId: null, subId: null, cardId: null };
 
+/* ── the one view setting that outlives the session ─────────────────────── */
+
+// The search text and the rarity filter deliberately do not persist: both hide
+// cards, and reopening the app to a part of a series with no memory of having
+// narrowed it would read as cards having gone missing. An ordering hides
+// nothing, so keeping it is safe — and it is the kind of preference a person
+// sets once for how they like to read a set.
+//
+// It lives in localStorage rather than in the collection data, so it stays a
+// property of this device and never travels through sync as if it were part of
+// the archive. Reads and writes are guarded because storage can be unavailable
+// — a browser in private mode, or with site data switched off — and a
+// preference is no reason for the app not to open.
+//
+// These sit above `view` on purpose: `view` calls readLedgerSort() as it is
+// built, and a const declared further down the file would still be in its dead
+// zone at that moment. The guard below would have caught the resulting throw
+// and quietly handed back the default for ever.
+
+const SORT_KEY = 'ledger-sort';
+const SORTS = ['name', 'rarity'];
+
+function readLedgerSort(){
+  try{
+    const stored = localStorage.getItem(SORT_KEY);
+    return SORTS.includes(stored) ? stored : 'name';
+  }catch(e){ return 'name'; }
+}
+
+export function setLedgerSort(next){
+  view.ledgerSort = SORTS.includes(next) ? next : 'name';
+  try{ localStorage.setItem(SORT_KEY, view.ledgerSort); }
+  catch(e){ /* it just will not be remembered next time */ }
+}
+
 // View-local state that outlives a single render pass.
 export const view = {
   ledgerSearch: '',
   ledgerRarityFilter: '',
-  // How the Ledger list is ordered: 'name' (A–Z) or 'rarity'.
-  ledgerSort: 'name',
+  // How the Ledger list is ordered: 'name' (A–Z) or 'rarity'. Kept between
+  // sessions — see setLedgerSort below.
+  ledgerSort: readLedgerSort(),
   mode: 'ledger',
   binderPage: 0,
   lastBinderSubId: null,

@@ -20,7 +20,7 @@ does need to be served over `http(s)` rather than opened as a `file://` URL,
 because ES modules and service workers both require an origin.
 
 ```sh
-npm test         # 107 checks in headless Chrome
+npm test         # 114 checks in headless Chrome
 npm run icons    # regenerate the PWA icons from scripts/make-icons.mjs
 ```
 

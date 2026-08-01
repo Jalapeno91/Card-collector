@@ -141,6 +141,40 @@ check('nor does the Album', await ev(`!!document.getElementById('ledgerSort')`),
 await renderIn('ledger');
 check('returning to the Ledger keeps the chosen order', await ev(`document.getElementById('ledgerSort').value`), 'rarity');
 
+/* ── the choice outlives the session ────────────────────────────────────── */
+
+check('choosing an order writes it down', await ev(`localStorage.getItem('ledger-sort')`), 'rarity');
+check('the filters that hide cards are not written down', await ev(`
+  [localStorage.getItem('ledger-search'), localStorage.getItem('ledger-rarity-filter')]`), [null, null]);
+
+await navigate();  // a fresh page, as if the app had been closed and reopened
+check('it comes back on the order chosen last time', await ev(`(await import('/js/state.js')).view.ledgerSort`), 'rarity');
+check('and the control opens on it', await ev(`(async()=>{
+  const st=await import('/js/state.js'); const r=await import('/js/render.js');
+  st.nav.collectionId='c1'; st.nav.subId='s1'; st.view.mode='ledger'; r.render();
+  return document.getElementById('ledgerSort').value;
+})()`), 'rarity');
+
+check('switching back to A–Z is remembered too', await ev(`(async()=>{
+  const st=await import('/js/state.js');
+  st.setLedgerSort('name');
+  return localStorage.getItem('ledger-sort');
+})()`), 'name');
+
+// Storage is shared with anything else on the origin and can be edited by
+// hand, so a value the app does not recognise must not leave it sorting by
+// nothing at all.
+await ev(`(()=>{ localStorage.setItem('ledger-sort','sideways'); return 1; })()`);
+await navigate();
+check('a stored value that makes no sense falls back to A–Z',
+  await ev(`(await import('/js/state.js')).view.ledgerSort`), 'name');
+
+check('setting an order that makes no sense is refused too', await ev(`(async()=>{
+  const st=await import('/js/state.js');
+  st.setLedgerSort('sideways');
+  return [st.view.ledgerSort, localStorage.getItem('ledger-sort')];
+})()`), ['name','name']);
+
 /* ── a series with no rarities defined at all ───────────────────────────── */
 
 check('no rarities defined is not an error', await ev(`(async()=>{
