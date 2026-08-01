@@ -104,6 +104,9 @@
   .ledger-row:not(.head):hover{ background:var(--panel-2); }
   .ledger-row:last-child{ border-bottom:none; }
   .cell-name{ font-weight:500; }
+  /* Rarity headings earn their place only where the Rarity column has been
+     dropped; above that the pill in each row already says it. */
+  .ledger-group{ display:none; }
   .pill{ display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:2px 9px; border-radius:10px; font-family:'IBM Plex Mono',monospace; border:1px solid; }
   .fx-tag{ font-size:11px; color:var(--parchment-dim); font-family:'IBM Plex Mono',monospace; }
   .qty{ font-family:'IBM Plex Mono',monospace; color:var(--accent); }
@@ -293,6 +296,9 @@
     .sidebar{ width:100%; border-right:none; border-bottom:1px solid var(--hairline); }
     .ledger-row{ grid-template-columns: 1fr 90px 70px; }
     .ledger-row .rarity-cell, .ledger-row .fx-cell, .ledger-row .cond-cell{ display:none; }
+    .ledger-group{ display:block; padding:9px 18px; background:var(--ink-2);
+      border-bottom:1px solid var(--hairline); font-family:'IBM Plex Mono',monospace;
+      font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; }
   }
 
 /* ─── Sync status + settings ─────────────────────────────────────────── */

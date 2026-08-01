@@ -11,6 +11,8 @@ export const editing = { collId: null, subId: null, cardId: null };
 export const view = {
   ledgerSearch: '',
   ledgerRarityFilter: '',
+  // How the Ledger list is ordered: 'name' (A–Z) or 'rarity'.
+  ledgerSort: 'name',
   mode: 'ledger',
   binderPage: 0,
   lastBinderSubId: null,
@@ -42,11 +44,41 @@ export function ownedUnique(sub){ return sub.cards.filter(c => Number(c.qty||0) 
 
 export function getFilteredCards(sub){
   const q = view.ledgerSearch.trim().toLowerCase();
-  return sub.cards.filter(c => {
+  // filter() already hands back a copy, so sorting it leaves sub.cards alone.
+  const cards = sub.cards.filter(c => {
     if (view.ledgerRarityFilter && c.rarity !== view.ledgerRarityFilter) return false;
     if (q && !`${c.name} ${c.notes}`.toLowerCase().includes(q)) return false;
     return true;
-  }).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  });
+  return cards.sort(view.ledgerSort === 'rarity' ? byRarityThenNumber(sub) : byName);
+}
+
+const byName = (a,b) => (a.name||'').localeCompare(b.name||'');
+
+// "By rarity" means the order the series itself lists its rarities in — the
+// collector's own running order, and the one the Binder already lays out in —
+// rather than the rarity names sorted alphabetically. Sorting Common before
+// SSR is the whole point; "Common, SSR" reading alphabetically as well is a
+// coincidence that would not survive a series with Rare and Ultra in it.
+//
+// Within a rarity the cards run by their printed number, which is how a set is
+// numbered and how the Binder fills its pockets. Cards with no number sit after
+// the numbered ones, A–Z among themselves, and a card whose rarity is not one
+// the series knows about lands in a group at the very end rather than being
+// dropped or silently sorted first.
+function byRarityThenNumber(sub){
+  const order = new Map((sub.rarities||[]).map((r,i) => [r.name, i]));
+  const rank = c => order.has(c.rarity) ? order.get(c.rarity) : Number.MAX_SAFE_INTEGER;
+  return (a,b) => {
+    const byGroup = rank(a) - rank(b);
+    if (byGroup) return byGroup;
+    const an = a.number == null || a.number === '' ? null : Number(a.number);
+    const bn = b.number == null || b.number === '' ? null : Number(b.number);
+    if (an != null && bn != null && an !== bn) return an - bn;
+    if (an != null && bn == null) return -1;
+    if (an == null && bn != null) return 1;
+    return byName(a,b);
+  };
 }
 
 /* ── linked slots ───────────────────────────────────────────────────────── */

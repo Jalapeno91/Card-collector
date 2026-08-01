@@ -202,6 +202,10 @@ function renderSubcollection(coll, sub){
     <div class="toolbar">
       <input type="text" class="search" id="searchInput" placeholder="Search by card name or notes…" value="${escapeHtml(view.ledgerSearch)}" />
       <select class="rarity-filter" id="rarityFilter"><option value="">All rarities</option></select>
+      ${view.mode === 'ledger' ? `<select class="rarity-filter" id="ledgerSort">
+        <option value="name">Sort: A–Z</option>
+        <option value="rarity">Sort: by rarity</option>
+      </select>` : ''}
       <div class="view-toggle">
         <button data-mode="ledger" class="${view.mode==='ledger'?'active':''}">Ledger</button>
         <button data-mode="binder" class="${view.mode==='binder'?'active':''}">Binder</button>
@@ -230,6 +234,13 @@ function renderSubcollection(coll, sub){
   (sub.rarities||[]).forEach(r => { const o=document.createElement('option'); o.value=r.name; o.textContent=r.name; rf.appendChild(o); });
   rf.value = view.ledgerRarityFilter;
   rf.onchange = () => { view.ledgerRarityFilter = rf.value; renderContent(coll, sub); };
+  // Only rendered in the Ledger view — the Binder and Album have an order of
+  // their own that this would have no say over.
+  const ls = el('ledgerSort');
+  if (ls){
+    ls.value = view.ledgerSort;
+    ls.onchange = () => { view.ledgerSort = ls.value; renderContent(coll, sub); };
+  }
   el('searchInput').oninput = (e) => { view.ledgerSearch = e.target.value; renderContent(coll, sub); };
   el('openAddCard').onclick = () => openAddCard(coll.id, sub.id);
 
@@ -262,8 +273,16 @@ function renderLedgerRows(coll, sub){
   let rows = `<div class="ledger-row head">
     <div>Card</div><div class="rarity-cell">Rarity</div><div class="fx-cell">Effect</div><div class="cond-cell">Condition</div><div>Qty</div><div></div>
   </div>`;
+  // A heading at each change of rarity. It only shows on a narrow screen,
+  // where the Rarity column is hidden — without it, ordering by rarity there
+  // would look like no order at all.
+  let groupSoFar = null;
   cards.forEach(c => {
     const rarity = (sub.rarities||[]).find(r => r.name === c.rarity);
+    if (view.ledgerSort === 'rarity' && c.rarity !== groupSoFar){
+      groupSoFar = c.rarity;
+      rows += `<div class="ledger-group"${rarity ? ` style="color:${rarity.color};"` : ''}>${escapeHtml(c.rarity || 'No rarity')}</div>`;
+    }
     const fx = EFFECTS[c.effect] || EFFECTS.matte;
     rows += `<div class="ledger-row" data-id="${c.id}">
       <div class="cell-name">${escapeHtml(c.name)}${c.hasPhoto ? ' <span title="Has a photo" style="opacity:.7;">📷</span>' : ''}${c.linkedSlots && c.linkedSlots.length ? ' <span title="Also counts toward other series" style="opacity:.7;">🔗</span>' : ''}</div>
