@@ -507,9 +507,16 @@
   transform-style: preserve-3d;
   transition: transform 620ms cubic-bezier(.36,.02,.28,1);
 }
-.album-turn.from-right{ right:0; transform-origin: left center; transform: rotateY(0deg); }
+/* The hinge is the middle of the spine — where the rings are — not the edge of
+   the page. A page is half the book wide, so swinging it about its own inner
+   edge leaves it a whole spine's width from where the opposite page sits, and
+   it lands 26px off and snaps sideways as the turn ends. Pivoting on the rings
+   is both what a binder does and what makes the leaf land exactly on the page
+   it becomes. With --spine at 0 on a phone, both of these are the plain edge
+   they used to be. */
+.album-turn.from-right{ right:0; transform-origin: calc(var(--spine) / -2) center; transform: rotateY(0deg); }
 .album-turn.from-right.turned{ transform: rotateY(-180deg); }
-.album-turn.from-left{ left:0; transform-origin: right center; transform: rotateY(0deg); }
+.album-turn.from-left{ left:0; transform-origin: calc(100% + var(--spine) / 2) center; transform: rotateY(0deg); }
 .album-turn.from-left.turned{ transform: rotateY(180deg); }
 .album-turn-face{ position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; }
 .album-turn-face.b{ transform: rotateY(180deg); }

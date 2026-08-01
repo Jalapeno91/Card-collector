@@ -11,7 +11,7 @@ import { createStaticServer } from '../scripts/serve.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.LEDGER_PORT) || 8765;
 const CDP = Number(process.env.LEDGER_CDP) || 9222;
-const SUITES = ['smoke.test.mjs', 'storage.test.mjs', 'ledger-sort.test.mjs', 'scan.test.mjs', 'sync.test.mjs'];
+const SUITES = ['smoke.test.mjs', 'storage.test.mjs', 'ledger-sort.test.mjs', 'album.test.mjs', 'scan.test.mjs', 'sync.test.mjs'];
 
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
