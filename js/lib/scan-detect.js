@@ -385,6 +385,245 @@ export function findCardQuad(img){
   return best.quad.map(p => ({ x: p.x / scale, y: p.y / scale }));
 }
 
+/* ── an outline of any shape ────────────────────────────────────────────── */
+//
+// Some cards aren't rectangles. Rather than fitting straight lines (which by
+// definition can't follow a curve), this separates the card from its
+// background by colour, then samples that shape's edge at many angles around
+// its centre — a technique that reads straight sides and curved ones the
+// same way, with no separate code path for either.
+
+const OUTLINE_SAMPLES = 72;     // rays cast from the blob's centre, one per 5°
+const OUTLINE_MIN_POINTS = 10;  // fewer surviving rays than this and the trace is too broken to trust
+const OUTLINE_AREA_MIN = 0.04;  // plausibility bounds, mirrors plausible()'s area check above
+const OUTLINE_AREA_MAX = 0.92;
+
+// Colour statistics of a thin ring around the photo's edge — on the
+// assumption that whatever surface the card sits on, that surface (not the
+// card) is what a border-hugging ring mostly contains.
+function backgroundStats(data, width, height){
+  const ring = Math.max(2, Math.round(Math.min(width, height) * 0.02));
+  let n = 0, sr = 0, sg = 0, sb = 0;
+  const visit = (x, y, fn) => { const i = (y*width + x) * 4; fn(i); };
+  const forRing = (fn) => {
+    for (let x = 0; x < width; x++){
+      for (let d = 0; d < ring; d++){ visit(x, d, fn); visit(x, height-1-d, fn); }
+    }
+    for (let y = ring; y < height - ring; y++){
+      for (let d = 0; d < ring; d++){ visit(d, y, fn); visit(width-1-d, y, fn); }
+    }
+  };
+  forRing(i => { sr += data[i]; sg += data[i+1]; sb += data[i+2]; n++; });
+  const mean = [sr/n, sg/n, sb/n];
+  let vr = 0, vg = 0, vb = 0;
+  forRing(i => { vr += (data[i]-mean[0])**2; vg += (data[i+1]-mean[1])**2; vb += (data[i+2]-mean[2])**2; });
+  // Floored so a near-uniform background (a sheet of paper, a desk) doesn't
+  // make the distance test blow up on ordinary compression noise.
+  const std = [Math.max(6, Math.sqrt(vr/n)), Math.max(6, Math.sqrt(vg/n)), Math.max(6, Math.sqrt(vb/n))];
+  return { mean, std };
+}
+
+// How far each pixel's colour sits from the background, in standard
+// deviations — a card that contrasts with its background scores high here
+// regardless of whether either one is light, dark, or coloured.
+function distanceFromBackground(data, width, height, stats){
+  const { mean, std } = stats;
+  const dist = new Float32Array(width * height);
+  for (let p = 0, i = 0; p < dist.length; p++, i += 4){
+    const dr = (data[i]-mean[0])/std[0], dg = (data[i+1]-mean[1])/std[1], db = (data[i+2]-mean[2])/std[2];
+    dist[p] = Math.sqrt(dr*dr + dg*dg + db*db);
+  }
+  return dist;
+}
+
+// Otsu's method: the split point that best separates a two-humped histogram
+// into its two groups. Used here on "distance from background" rather than
+// brightness, to turn that distance map into a clean foreground/background
+// split without a fixed, guessed threshold.
+function otsuThreshold(values){
+  let max = 0;
+  for (let i = 0; i < values.length; i++) if (values[i] > max) max = values[i];
+  if (max <= 0) return 0;
+  const BINS = 256;
+  const hist = new Int32Array(BINS);
+  for (let i = 0; i < values.length; i++) hist[Math.min(BINS-1, Math.floor(values[i]/max*(BINS-1)))]++;
+  const total = values.length;
+  let sumAll = 0;
+  for (let b = 0; b < BINS; b++) sumAll += b * hist[b];
+  let sumB = 0, wB = 0, best = 0, bestVar = -1;
+  for (let b = 0; b < BINS; b++){
+    wB += hist[b];
+    if (wB === 0) continue;
+    const wF = total - wB;
+    if (wF === 0) break;
+    sumB += b * hist[b];
+    const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > bestVar){ bestVar = between; best = b; }
+  }
+  return best / (BINS - 1) * max;
+}
+
+// Flood-fills every foreground blob, and keeps the largest one that never
+// touches the photo's edge — the assumption (stated in the scan hint) is
+// that the card is framed with a margin, so whatever's still cut off by the
+// frame is background clutter, not the card.
+function largestInteriorBlob(mask, width, height){
+  const label = new Int32Array(mask.length).fill(-1);
+  const marginX = Math.round(width * 0.04), marginY = Math.round(height * 0.04);
+  let bestId = -1, bestCount = 0, id = 0;
+  const stack = [];
+  for (let start = 0; start < mask.length; start++){
+    if (mask[start] !== 1 || label[start] !== -1) continue;
+    let count = 0, touchesBorder = false;
+    stack.length = 0; stack.push(start); label[start] = id;
+    while (stack.length){
+      const cur = stack.pop();
+      const cx = cur % width, cy = (cur / width) | 0;
+      count++;
+      if (cx < marginX || cx >= width-marginX || cy < marginY || cy >= height-marginY) touchesBorder = true;
+      for (const n of [cur-1, cur+1, cur-width, cur+width]){
+        if (n < 0 || n >= mask.length) continue;
+        if (Math.abs((n % width) - cx) > 1) continue; // guards the cur±1 row-wrap case
+        if (mask[n] === 1 && label[n] === -1){ label[n] = id; stack.push(n); }
+      }
+    }
+    if (!touchesBorder && count > bestCount){ bestCount = count; bestId = id; }
+    id++;
+  }
+  if (bestId < 0) return null;
+  const out = new Uint8Array(mask.length);
+  for (let i = 0; i < out.length; i++) out[i] = label[i] === bestId ? 1 : 0;
+  return { mask: out, count: bestCount };
+}
+
+function centroidOf(mask, width, height){
+  let sx = 0, sy = 0, n = 0;
+  for (let y = 0; y < height; y++){
+    for (let x = 0; x < width; x++){
+      if (mask[y*width + x] === 1){ sx += x; sy += y; n++; }
+    }
+  }
+  return n ? { x: sx/n, y: sy/n } : null;
+}
+
+// Walks outward from the centre along `samples` evenly spaced angles,
+// keeping the last pixel still inside the mask on each ray. The result is
+// already in angular order — a polygon, with no separate step needed to
+// stitch boundary pixels into a sequence.
+function radialBoundary(mask, width, height, centroid, samples){
+  const points = [];
+  const maxR = Math.hypot(width, height);
+  for (let k = 0; k < samples; k++){
+    const theta = (k / samples) * Math.PI * 2;
+    const cos = Math.cos(theta), sin = Math.sin(theta);
+    let lastInside = null;
+    for (let r = 0; r < maxR; r++){
+      const x = Math.round(centroid.x + cos*r), y = Math.round(centroid.y + sin*r);
+      if (x < 0 || y < 0 || x >= width || y >= height) break;
+      if (mask[y*width + x] === 1) lastInside = { x, y };
+      else if (lastInside) break; // left the shape after having been inside it
+    }
+    if (lastInside) points.push(lastInside);
+  }
+  return points;
+}
+
+// Ramer–Douglas–Peucker over an open run of points: drops any point that
+// lies within `epsilon` of the straight line between its surviving
+// neighbours, so long straight sides collapse toward their two endpoints
+// while curved ones keep enough points to still read as curved.
+function simplify(points, epsilon){
+  if (points.length < 3) return points.slice();
+  const sqEpsilon = epsilon * epsilon;
+  function sqSegDist(p, a, b){
+    let x = a.x, y = a.y, dx = b.x-a.x, dy = b.y-a.y;
+    if (dx || dy){
+      const t = ((p.x-x)*dx + (p.y-y)*dy) / (dx*dx + dy*dy);
+      if (t > 1){ x = b.x; y = b.y; } else if (t > 0){ x += dx*t; y += dy*t; }
+    }
+    dx = p.x-x; dy = p.y-y;
+    return dx*dx + dy*dy;
+  }
+  function rdp(pts){
+    let maxDist = 0, index = -1;
+    const a = pts[0], b = pts[pts.length-1];
+    for (let i = 1; i < pts.length-1; i++){
+      const d = sqSegDist(pts[i], a, b);
+      if (d > maxDist){ maxDist = d; index = i; }
+    }
+    if (index !== -1 && maxDist > sqEpsilon){
+      const left = rdp(pts.slice(0, index+1));
+      return left.slice(0, -1).concat(rdp(pts.slice(index)));
+    }
+    return [a, b];
+  }
+  return rdp(points);
+}
+
+// The same simplification, but for a closed loop: split at the loop's two
+// most distant points so each half has real anchors to simplify against,
+// instead of an arbitrary seam where the point array happens to start.
+function simplifyClosed(points, epsilon){
+  if (points.length < 5) return points.slice();
+  let ia = 0, ib = 1, best = -1;
+  for (let i = 0; i < points.length; i++){
+    for (let j = i+1; j < points.length; j++){
+      const d = (points[i].x-points[j].x)**2 + (points[i].y-points[j].y)**2;
+      if (d > best){ best = d; ia = i; ib = j; }
+    }
+  }
+  const [lo, hi] = ia < ib ? [ia, ib] : [ib, ia];
+  const arc1 = simplify(points.slice(lo, hi+1), epsilon);
+  const arc2 = simplify(points.slice(hi).concat(points.slice(0, lo+1)), epsilon);
+  return arc1.slice(0, -1).concat(arc2.slice(0, -1));
+}
+
+// Returns an ordered outline of the card in the original photo's
+// coordinates, clockwise from the top-left like findCardQuad — or null when
+// nothing convincing was found (the caller falls back to defaultQuad, same
+// as it does for the rectangle path).
+export function findCardOutline(img){
+  const { canvas, scale } = drawScaled(img, WORK_MAX);
+  const width = canvas.width, height = canvas.height;
+  if (width < 24 || height < 24) return null;
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const data = ctx.getImageData(0, 0, width, height).data;
+
+  const stats = backgroundStats(data, width, height);
+  const dist = distanceFromBackground(data, width, height, stats);
+  const threshold = otsuThreshold(dist);
+  if (!(threshold > 0)) return null;
+
+  let mask = new Float32Array(width * height);
+  for (let i = 0; i < mask.length; i++) mask[i] = dist[i] > threshold ? 1 : 0;
+  // A blur-then-rethreshold acts as a majority filter: it closes small holes
+  // (glare on a glossy card) and drops single-pixel speckle, reusing the same
+  // box blur the rectangle detector already relies on.
+  mask = blur(mask, width, height, 2);
+  const binary = new Uint8Array(width * height);
+  for (let i = 0; i < binary.length; i++) binary[i] = mask[i] > 0.5 ? 1 : 0;
+
+  const blob = largestInteriorBlob(binary, width, height);
+  if (!blob) return null;
+  const areaFrac = blob.count / (width * height);
+  if (areaFrac < OUTLINE_AREA_MIN || areaFrac > OUTLINE_AREA_MAX) return null;
+
+  const centroid = centroidOf(blob.mask, width, height);
+  if (!centroid) return null;
+
+  const raw = radialBoundary(blob.mask, width, height, centroid, OUTLINE_SAMPLES);
+  if (raw.length < OUTLINE_MIN_POINTS) return null;
+
+  const epsilon = Math.max(1.5, Math.min(width, height) * 0.006);
+  const simplified = simplifyClosed(raw, epsilon);
+  if (simplified.length < 5) return null;
+
+  const ordered = orderCorners(simplified);
+  return ordered.map(p => ({ x: p.x / scale, y: p.y / scale }));
+}
+
 /* ── straightening ──────────────────────────────────────────────────────── */
 
 // Solves the 8 unknowns of the projective transform that maps the flat output
@@ -467,4 +706,42 @@ export function unwarpQuad(img, quad, maxSide = OUT_MAX){
   }
   outCtx.putImageData(dest, 0, 0);
   return out;
+}
+
+// Cuts an odd-shaped card out of its photo: crops to the outline's bounding
+// box and makes everything outside the outline transparent. There's no
+// perspective correction here, unlike unwarpQuad — once the card isn't a
+// rectangle there's no longer a known-flat shape in frame to unwarp against,
+// so this only handles scale and offset. Returns the cropped canvas, the
+// outline re-expressed as 0–1 fractions of that canvas, and that box's true
+// width:height ratio — needed separately because normalizing the points to
+// their own bounding box, on two axes independently, throws the ratio away.
+export function rasterizeOutline(img, points, maxSide = OUT_MAX){
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const boxW = Math.max(1, maxX - minX), boxH = Math.max(1, maxY - minY);
+  const shrink = Math.min(1, maxSide / Math.max(boxW, boxH));
+  const outW = Math.max(1, Math.round(boxW * shrink)), outH = Math.max(1, Math.round(boxH * shrink));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = outW; canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, minX, minY, boxW, boxH, 0, 0, outW, outH);
+
+  // destination-in keeps only the pixels already on the canvas that the new
+  // fill also covers — an easy way to punch a photo down to an arbitrary
+  // path without touching the pixels that survive.
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = (p.x - minX) * shrink, y = (p.y - minY) * shrink;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+
+  const normalized = points.map(p => [(p.x - minX) / boxW, (p.y - minY) / boxH]);
+  return { canvas, points: normalized, aspect: boxW / boxH };
 }

@@ -8,9 +8,15 @@
 // What comes back is handed to js/lib/scan-detect.js, which proposes four
 // corners. Detection is a guess, so the corners are always shown as draggable
 // handles: a wrong guess costs a nudge rather than a retake.
+//
+// A second mode handles cards that aren't rectangles: the same photo, but the
+// proposal is a traced outline of any shape instead of four corners, and the
+// handles it hands back can be dragged, added to, or removed, not just
+// nudged. That mode saves a PNG with the area outside the shape made
+// transparent, instead of the usual straightened JPEG.
 
 import { el, showToast } from './ui.js';
-import { findCardQuad, unwarpQuad, defaultQuad } from './lib/scan-detect.js';
+import { findCardQuad, unwarpQuad, defaultQuad, findCardOutline, rasterizeOutline } from './lib/scan-detect.js';
 
 const HANDLE_RADIUS = 12;   // drawn size, in CSS pixels
 const GRAB_RADIUS = 34;     // how near a finger has to land to catch a handle
@@ -23,6 +29,11 @@ let view = null;       // how photo coordinates map onto the canvas
 let dragging = -1;     // index of the corner under the finger, or -1
 let pointerId = null;
 let onCropped = null;  // what to call with the finished data URL
+
+let shapeMode = false;        // false = rectangle (default), true = a traced outline
+let downPoint = null;         // canvas-space pointerdown position, to tell a tap from a drag
+let moved = false;
+let lastTap = { index: -1, time: 0 }; // double-tap-to-remove bookkeeping, shape mode only
 
 /* ── loading ────────────────────────────────────────────────────────────── */
 
@@ -106,6 +117,18 @@ function draw(){
   ctx.lineWidth = 2;
   ctx.stroke();
 
+  // In shape mode, a faint dot at each edge's midpoint hints that tapping
+  // there adds a point — the only way to add one, since there's no menu.
+  if (shapeMode){
+    for (let i = 0; i < pts.length; i++){
+      const a = pts[i], b = pts[(i+1) % pts.length];
+      ctx.beginPath();
+      ctx.arc((a.x+b.x)/2, (a.y+b.y)/2, HANDLE_RADIUS*0.4, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,0.32)';
+      ctx.fill();
+    }
+  }
+
   pts.forEach((p, i) => {
     ctx.beginPath();
     ctx.arc(p.x, p.y, HANDLE_RADIUS, 0, Math.PI*2);
@@ -171,9 +194,30 @@ function bindCanvas(){
       const d = Math.hypot(c.x - p.x, c.y - p.y);
       if (d < bestDist){ bestDist = d; nearest = i; }
     });
+
+    // No handle close enough — in shape mode, a tap near an edge inserts a
+    // new point there instead, which the same gesture then drags into place.
+    if (nearest < 0 && shapeMode){
+      const pts = quad.map(toCanvas);
+      let bestSeg = -1, bestSegDist = GRAB_RADIUS;
+      for (let i = 0; i < pts.length; i++){
+        const a = pts[i], b = pts[(i+1) % pts.length];
+        const dx = b.x-a.x, dy = b.y-a.y;
+        const t = Math.max(0, Math.min(1, dx||dy ? ((p.x-a.x)*dx + (p.y-a.y)*dy) / (dx*dx+dy*dy) : 0));
+        const d = Math.hypot(a.x+dx*t - p.x, a.y+dy*t - p.y);
+        if (d < bestSegDist){ bestSegDist = d; bestSeg = i; }
+      }
+      if (bestSeg >= 0){
+        quad.splice(bestSeg+1, 0, toPhoto(p));
+        nearest = bestSeg+1;
+      }
+    }
+
     if (nearest < 0) return;
     dragging = nearest;
     pointerId = e.pointerId;
+    downPoint = p;
+    moved = false;
     canvas.setPointerCapture(e.pointerId);
     e.preventDefault();
     draw();
@@ -181,7 +225,9 @@ function bindCanvas(){
 
   canvas.onpointermove = (e) => {
     if (dragging < 0 || e.pointerId !== pointerId) return;
-    const p = toPhoto(localPoint(e));
+    const local = localPoint(e);
+    if (downPoint && Math.hypot(local.x-downPoint.x, local.y-downPoint.y) > 4) moved = true;
+    const p = toPhoto(local);
     quad[dragging] = {
       x: Math.max(0, Math.min(photo.naturalWidth, p.x)),
       y: Math.max(0, Math.min(photo.naturalHeight, p.y)),
@@ -192,8 +238,20 @@ function bindCanvas(){
 
   const release = (e) => {
     if (e.pointerId !== pointerId) return;
+    // A tap (not a drag) on a point, twice within 400ms, removes it — shape
+    // mode only, and never below a triangle.
+    if (shapeMode && !moved && dragging >= 0 && quad.length > 3){
+      const now = performance.now();
+      if (lastTap.index === dragging && now - lastTap.time < 400){
+        quad.splice(dragging, 1);
+        lastTap = { index: -1, time: 0 };
+      } else {
+        lastTap = { index: dragging, time: now };
+      }
+    }
     dragging = -1;
     pointerId = null;
+    downPoint = null;
     draw();
   };
   canvas.onpointerup = release;
@@ -206,19 +264,29 @@ function close(){
   el('scanOverlay').classList.remove('open');
   photo = null; quad = null; view = null;
   dragging = -1; pointerId = null;
+  downPoint = null; moved = false; lastTap = { index: -1, time: 0 };
+  setShapeMode(false);
   el('scanCaptureInput').value = '';
 }
 
+function setShapeMode(on){
+  shapeMode = on;
+  el('scanModeRect').classList.toggle('sel', !on);
+  el('scanModeShape').classList.toggle('sel', on);
+}
+
 async function detect(){
-  setHint('Finding the card…');
+  setHint(shapeMode ? 'Tracing the outline…' : 'Finding the card…');
   await nextFrame();
   let found = null;
-  try{ found = findCardQuad(photo); }
+  try{ found = shapeMode ? findCardOutline(photo) : findCardQuad(photo); }
   catch(e){ found = null; }
   quad = found || defaultQuad(photo.naturalWidth, photo.naturalHeight);
   setHint(found
-    ? 'Found the card — drag a corner if it needs nudging'
-    : "Couldn't pick out the card — drag the corners to match it");
+    ? (shapeMode ? 'Traced an outline — drag points to fix it, tap an edge to add one, tap a point twice to remove it'
+                 : 'Found the card — drag a corner if it needs nudging')
+    : (shapeMode ? "Couldn't trace an outline — drag the points to match your card, shot flat-on works best"
+                 : "Couldn't pick out the card — drag the corners to match it"));
   draw();
 }
 
@@ -250,18 +318,29 @@ el('scanRetake').onclick = () => {
 
 el('scanReset').onclick = () => { if (photo) detect(); };
 
+el('scanModeRect').onclick = () => { if (photo && shapeMode){ setShapeMode(false); detect(); } };
+el('scanModeShape').onclick = () => { if (photo && !shapeMode){ setShapeMode(true); detect(); } };
+
 el('scanUse').onclick = async () => {
   if (!photo || !quad) return;
-  setHint('Straightening…');
+  setHint(shapeMode ? 'Cutting out the shape…' : 'Straightening…');
   await nextFrame();
   try{
-    const cropped = unwarpQuad(photo, quad);
-    const dataUrl = cropped.toDataURL('image/jpeg', 0.82);
     const done = onCropped;
-    close();
-    if (done) done(dataUrl);
+    if (shapeMode){
+      const { canvas: cropped, points, aspect } = rasterizeOutline(photo, quad);
+      const dataUrl = cropped.toDataURL('image/png');
+      close();
+      if (done) done({ dataUrl, shape: { points, aspect } });
+    } else {
+      const cropped = unwarpQuad(photo, quad);
+      const dataUrl = cropped.toDataURL('image/jpeg', 0.82);
+      close();
+      if (done) done({ dataUrl, shape: null });
+    }
   }catch(err){
-    setHint('That crop could not be straightened — try adjusting the corners');
+    setHint(shapeMode ? 'That shape could not be cut out — try adjusting the points'
+                       : 'That crop could not be straightened — try adjusting the corners');
   }
 };
 
@@ -275,8 +354,10 @@ window.addEventListener('resize', () => {
 
 bindCanvas();
 
-// Opens the camera, then the crop screen. `handler` receives the finished
-// photo as a data URL; it is never called if the camera is dismissed.
+// Opens the camera, then the crop screen. `handler` receives
+// `{ dataUrl, shape }` — `shape` is `null` for an ordinary rectangular scan,
+// or `{ points }` (normalized 0–1 outline points) when the user chose
+// "Unusual shape". It is never called if the camera is dismissed.
 export function startScan(handler){
   onCropped = handler;
   el('scanCaptureInput').value = '';

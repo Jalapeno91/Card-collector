@@ -7,8 +7,8 @@ import { render } from '../render.js';
 
 let selectedEffect = 'matte';
 let pendingLinkedSlots = [];
-let pendingFront = { dataUrl: null, remove: false };
-let pendingBack = { dataUrl: null, remove: false };
+let pendingFront = { dataUrl: null, shape: null, remove: false };
+let pendingBack = { dataUrl: null, shape: null, remove: false };
 
 /* ── photo fields ───────────────────────────────────────────────────────── */
 
@@ -21,14 +21,16 @@ const PHOTO_FIELDS = [
 PHOTO_FIELDS.forEach(field => {
   // A scanned photo joins the same pending-photo queue as a picked one, so
   // saving, replacing and syncing need to know nothing about where it came from.
-  function accept(dataUrl){
-    field.set({ dataUrl, remove: false });
+  // `shape` is the traced outline from "Unusual shape" scan mode, or null for
+  // an ordinary rectangular photo (which is all a plain file pick can produce).
+  function accept(dataUrl, shape){
+    field.set({ dataUrl, shape: shape || null, remove: false });
     el(field.preview).style.backgroundImage = `url(${dataUrl})`;
     el(field.removeBtn).style.display = 'inline-block';
   }
 
-  el(field.scanBtn).onclick = () => startScan(dataUrl => {
-    accept(dataUrl);
+  el(field.scanBtn).onclick = () => startScan(({ dataUrl, shape }) => {
+    accept(dataUrl, shape);
     showToast('Card scanned');
   });
 
@@ -37,11 +39,11 @@ PHOTO_FIELDS.forEach(field => {
     if (!file) return;
     try{
       const { dataUrl } = await readImageFile(file, 900);
-      accept(dataUrl);
+      accept(dataUrl, null);
     }catch(err){ showToast(err.message); }
   };
   el(field.removeBtn).onclick = () => {
-    field.set({ dataUrl: null, remove: true });
+    field.set({ dataUrl: null, shape: null, remove: true });
     el(field.preview).style.backgroundImage = '';
     el(field.input).value = '';
     el(field.removeBtn).style.display = 'none';
@@ -50,7 +52,7 @@ PHOTO_FIELDS.forEach(field => {
 
 function resetPhotoFields(){
   PHOTO_FIELDS.forEach(field => {
-    field.set({ dataUrl: null, remove: false });
+    field.set({ dataUrl: null, shape: null, remove: false });
     el(field.input).value = '';
     el(field.preview).style.backgroundImage = '';
     el(field.removeBtn).style.display = 'none';
@@ -233,15 +235,26 @@ el('saveCard').onclick = async () => {
     { pending: pendingFront, key: photoKey(cardId),     flag: 'hasPhoto',     label: 'front' },
     { pending: pendingBack,  key: photoBackKey(cardId), flag: 'hasBackPhoto', label: 'back' },
   ];
+  // A card's shape is a property of the physical card, not of one photo, so
+  // front and back share `payload.shape`. It's only touched when a photo is
+  // actually (re)written this save — front then back, so if both sides were
+  // just rescanned, the one scanned as the true outline (rather than plain
+  // rectangle) wins even if it isn't the last one processed.
+  let resolvedShape;
   for (const w of photoWrites){
     if (w.pending.dataUrl){
-      try{ await setBlob(w.key, w.pending.dataUrl); payload[w.flag] = true; }
+      try{
+        await setBlob(w.key, w.pending.dataUrl);
+        payload[w.flag] = true;
+        resolvedShape = w.pending.shape || resolvedShape || null;
+      }
       catch(e){ showToast(`Card saved, but the ${w.label} photo could not be stored`); payload[w.flag] = false; }
     } else if (w.pending.remove){
       try{ await deleteBlob(w.key); }catch(e){ /* nothing to remove */ }
       payload[w.flag] = false;
     }
   }
+  if (resolvedShape !== undefined) payload.shape = resolvedShape;
 
   if (editing.cardId){
     const idx = sub.cards.findIndex(c => c.id === editing.cardId);

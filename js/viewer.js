@@ -4,6 +4,7 @@ import { el, showToast, EFFECTS } from './ui.js';
 import { nav, getColl, getSub } from './state.js';
 import { getBlob, photoKey, photoBackKey } from './store.js';
 import { openEditCard, confirmDeleteCard } from './modals/card.js';
+import { shapeStyle } from './lib/shape.js';
 
 let flipped = false;
 let tiltX = 0;
@@ -46,6 +47,17 @@ export async function openViewer(coll, sub, cardId){
   context = { collId: coll.id, subId: sub.id, cardId: card.id };
   const rarity = (sub.rarities||[]).find(r => r.name === card.rarity);
   const fx = EFFECTS[card.effect] || EFFECTS.matte;
+
+  // A non-rectangular card gets clipped to its true outline and re-sized to
+  // that outline's own proportions; a plain card gets today's fixed rectangle.
+  const card3d = el('card3d');
+  const style = shapeStyle(card.shape);
+  card3d.classList.toggle('shaped', !!style);
+  card3d.style.aspectRatio = style ? style.aspectRatio : '';
+  card3d.style.height = style ? 'auto' : '';
+  document.querySelectorAll('.c-face').forEach(face => {
+    face.style.clipPath = style ? style.clipPath : '';
+  });
 
   const cBase = el('cBase');
   cBase.style.backgroundImage = 'none';

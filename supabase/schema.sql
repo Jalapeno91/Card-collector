@@ -67,6 +67,7 @@ create table if not exists public.cards (
   photo_updated_at       timestamptz,
   has_back_photo         boolean     not null default false,
   back_photo_updated_at  timestamptz,
+  shape                  jsonb,
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now(),
   deleted_at             timestamptz,

@@ -15,6 +15,7 @@ import { el, escapeHtml } from './ui.js';
 import { view, buildBinderSlots, getColl } from './state.js';
 import { getBlob, photoKey, photoBackKey } from './store.js';
 import { openViewer, goToLinkedCard } from './viewer.js';
+import { shapeStyle } from './lib/shape.js';
 
 const PER_LEAF = 9;
 const TURN_MS = 620;
@@ -65,8 +66,9 @@ function frontPocketHtml(slot, coll){
   }
 
   const c = slot.card;
+  const shpFront = shapeStyle(c.shape);
   return sleeveHtml(
-    `<div class="pocket-face" data-face="front-${c.id}" style="background:linear-gradient(160deg, ${coll.color} 0%, #14161d 85%);">
+    `<div class="pocket-face" data-face="front-${c.id}" style="background:linear-gradient(160deg, ${coll.color} 0%, #14161d 85%);${shpFront ? ` clip-path:${shpFront.clipPath};` : ''}">
        ${c.hasPhoto ? '' : `<div class="pocket-mono">${escapeHtml((c.name||'?').trim().charAt(0).toUpperCase())}</div>`}
        <div class="pocket-name">${escapeHtml(c.name)}</div>
      </div>`,
@@ -80,8 +82,9 @@ function backPocketHtml(slot, coll){
   const c = slot.card;
   // No back photo yet: a generated back in the collection's colour, so the
   // page still reads as a page rather than a grid of holes.
+  const shpBack = shapeStyle(c.shape);
   return sleeveHtml(
-    `<div class="pocket-face card-back${c.hasBackPhoto ? '' : ' generated'}" data-face="back-${c.id}" style="background:linear-gradient(160deg, #14161d 0%, ${coll.color} 130%);">
+    `<div class="pocket-face card-back${c.hasBackPhoto ? '' : ' generated'}" data-face="back-${c.id}" style="background:linear-gradient(160deg, #14161d 0%, ${coll.color} 130%);${shpBack ? ` clip-path:${shpBack.clipPath};` : ''}">
        ${c.hasBackPhoto ? '' : '<div class="card-back-mark"></div>'}
      </div>`,
     `data-id="${c.id}"`);

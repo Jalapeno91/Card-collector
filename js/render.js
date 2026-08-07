@@ -8,6 +8,7 @@ import {
   buildBinderSlots, collProgress, subProgress,
 } from './state.js';
 import { getBlob, logoKey, boxPhotoKey, photoKey } from './store.js';
+import { shapeStyle } from './lib/shape.js';
 import { renderAlbumView } from './album.js';
 import { openAddCollection, openEditCollection, confirmDeleteCollection } from './modals/collection.js';
 import { openAddSubcollection, openEditSubcollection, confirmDeleteSubcollection } from './modals/series.js';
@@ -351,8 +352,13 @@ function renderBinderView(coll, sub){
       </div>`;
     }
     const c = s.card;
+    // The tile itself stays the grid's uniform rectangle (so rows of pockets
+    // line up); the clip-path just traces the card's true silhouette inside
+    // it, the same tradeoff `background-size:cover` already makes for every
+    // photo here regardless of shape.
+    const shp = shapeStyle(c.shape);
     return `<div class="pocket" data-id="${c.id}">
-      <div class="pocket-face" data-face="${c.id}" style="--rc:${s.rarity.color}; background:linear-gradient(160deg, ${coll.color} 0%, #14161d 85%);">
+      <div class="pocket-face" data-face="${c.id}" style="--rc:${s.rarity.color}; background:linear-gradient(160deg, ${coll.color} 0%, #14161d 85%);${shp ? ` clip-path:${shp.clipPath};` : ''}">
         ${c.hasPhoto ? '' : `<div class="pocket-mono">${escapeHtml((c.name||'?').trim().charAt(0).toUpperCase())}</div>`}
         <div class="pocket-name">${escapeHtml(c.name)}</div>
       </div>

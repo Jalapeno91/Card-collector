@@ -51,6 +51,7 @@ const MAPS = {
     linkedSlots: 'linked_slots',
     hasPhoto: 'has_photo',
     hasBackPhoto: 'has_back_photo',
+    shape: 'shape',
     createdAt: 'created_at',
     photoUpdatedAt: 'photo_updated_at',
     backPhotoUpdatedAt: 'back_photo_updated_at',

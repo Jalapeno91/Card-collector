@@ -215,6 +215,12 @@
   .stage-wrap{ perspective:1200px; }
   .card3d{ position:relative; width:280px; height:392px; border-radius:16px; box-shadow:0 30px 60px rgba(0,0,0,.55); transform-style: preserve-3d; transition: transform .5s cubic-bezier(.2,.8,.2,1); will-change: transform; }
   .card3d.live{ transition: transform .05s linear; }
+  /* A non-rectangular card's true outline is set per-card as an inline
+     clip-path (js/viewer.js), so box-shadow — which clip-path would cut off
+     entirely, since it clips everything the element paints — gives way to a
+     drop-shadow, which is drawn from the clipped shape instead of the box. */
+  .card3d.shaped{ box-shadow:none; filter: drop-shadow(0 26px 46px rgba(0,0,0,.55)); }
+  .card3d.shaped .c-face{ border-radius:0; }
   .c-face{ position:absolute; inset:0; border-radius:16px; overflow:hidden; display:flex; flex-direction:column; backface-visibility:hidden; -webkit-backface-visibility:hidden; }
   .c-face-back{ transform: rotateY(180deg); }
   .c-base{ position:absolute; inset:0; background-size:cover; background-position:center; }
@@ -386,6 +392,10 @@
 .scan-overlay{ position:fixed; inset:0; background:#0c0e14; z-index:80; display:none; flex-direction:column; padding:max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)); }
 .scan-overlay.open{ display:flex; }
 .scan-hint{ text-align:center; font-size:13px; color:var(--parchment-dim); font-family:'IBM Plex Mono',monospace; padding:8px 6px 10px; line-height:1.4; }
+.scan-mode{ display:flex; gap:6px; justify-content:center; padding:0 6px 10px; }
+.scan-mode-opt{ flex:0 1 170px; border:1px solid var(--hairline); border-radius:var(--radius); padding:7px 10px; text-align:center; cursor:pointer; font-size:12px; color:var(--parchment-dim); background:transparent; font-family:inherit; }
+.scan-mode-opt:hover{ border-color:var(--parchment-dim); color:var(--parchment); }
+.scan-mode-opt.sel{ border-color:var(--brass); color:var(--brass); background:rgba(201,162,39,.08); }
 .scan-stage{ flex:1; min-height:0; position:relative; }
 /* touch-action:none stops the browser panning the page mid-drag, which would
    otherwise steal every corner adjustment on a phone. */

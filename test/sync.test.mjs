@@ -84,7 +84,7 @@ const push = await ev(`(async () => (await import('/js/storage/sync.js')).sync()
 check('pushes every row and the photo', [push.pushedRows, push.pushedBlobs], [3, 1]);
 check('all three tables land', await ev(`[__server.tables.collections.length, __server.tables.subcollections.length, __server.tables.cards.length]`), [1, 1, 1]);
 check('card columns are snake_case', await ev(`Object.keys(__server.tables.cards[0]).sort().join(',')`),
-  'back_photo_updated_at,condition,created_at,deleted_at,effect,has_back_photo,has_photo,id,linked_slots,name,notes,number,photo_updated_at,qty,rarity,subcollection_id,updated_at,user_id');
+  'back_photo_updated_at,condition,created_at,deleted_at,effect,has_back_photo,has_photo,id,linked_slots,name,notes,number,photo_updated_at,qty,rarity,shape,subcollection_id,updated_at,user_id');
 check('card values map correctly',
   await ev(`(({name,qty,number,effect,rarity,subcollection_id,user_id,has_photo}) => [name,qty,number,effect,rarity,subcollection_id,user_id,has_photo])(__server.tables.cards[0])`),
   ['The Weeping Bride', 3, 2, 'holo', 'SSR', 's1', 'user-1', true]);
