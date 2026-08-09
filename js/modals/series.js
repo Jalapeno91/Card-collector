@@ -3,6 +3,7 @@ import { nav, editing, getColl, getSub } from '../state.js';
 import { saveData, getBlob, setBlob, deleteBlob, boxPhotoKey, rarityBackPhotoKey } from '../store.js';
 import { openConfirm } from './confirm.js';
 import { render } from '../render.js';
+import { startScan } from '../scan.js';
 
 let pendingRarities = [];
 let pendingPhoto = { dataUrl: null, remove: false };
@@ -41,12 +42,25 @@ function renderRarityManageList(){
         <input type="checkbox" data-i="${i}" class="rc-shared-toggle" ${r.sharedBack?'checked':''} />
         Use one shared back image for every "${escapeHtml(r.name)}" card
       </label>
-      <div class="rarity-shared-photo" data-i="${i}" style="display:${r.sharedBack?'flex':'none'}">
-        <div class="rarity-shared-preview" data-i="${i}"></div>
+      <div class="rarity-shared-photo" data-i="${i}" style="display:${r.sharedBack?'block':'none'}">
+        <button type="button" class="btn-scan rc-shared-scan" data-i="${i}">⛶ Scan card with camera</button>
         <input type="file" accept="image/*" class="rc-shared-input" data-i="${i}" />
-        <button type="button" class="rc-shared-remove btn-ghost" data-i="${i}" style="display:none;">Remove photo</button>
+        <div class="rarity-shared-preview-row">
+          <div class="rarity-shared-preview" data-i="${i}"></div>
+          <button type="button" class="rc-shared-remove btn-ghost" data-i="${i}" style="display:none;">Remove photo</button>
+        </div>
       </div>
     </div>`).join('');
+
+  // Both the file picker and the camera scan land here — a shared back image
+  // has no single card's outline to trace, so a scan's shape (if any, from
+  // "Unusual shape" mode) is discarded and only the straightened photo kept.
+  function acceptSharedBack(i, dataUrl){
+    const r = pendingRarities[i];
+    pendingRarityBacks[r.id] = { dataUrl, remove: false };
+    wrap.querySelector(`.rarity-shared-preview[data-i="${i}"]`).style.backgroundImage = `url(${dataUrl})`;
+    wrap.querySelector(`.rc-shared-remove[data-i="${i}"]`).style.display = 'inline-block';
+  }
 
   wrap.querySelectorAll('.rc-color').forEach(inp => inp.oninput = () => { pendingRarities[inp.dataset.i].color = inp.value; });
   wrap.querySelectorAll('.rc-name').forEach(inp => inp.oninput = () => { pendingRarities[inp.dataset.i].name = inp.value; });
@@ -75,13 +89,17 @@ function renderRarityManageList(){
   wrap.querySelectorAll('.rc-shared-input').forEach(inp => inp.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const r = pendingRarities[inp.dataset.i];
     try{
       const { dataUrl } = await readImageFile(file, 800);
-      pendingRarityBacks[r.id] = { dataUrl, remove: false };
-      wrap.querySelector(`.rarity-shared-preview[data-i="${inp.dataset.i}"]`).style.backgroundImage = `url(${dataUrl})`;
-      wrap.querySelector(`.rc-shared-remove[data-i="${inp.dataset.i}"]`).style.display = 'inline-block';
+      acceptSharedBack(Number(inp.dataset.i), dataUrl);
     }catch(err){ showToast(err.message); }
+  });
+  wrap.querySelectorAll('.rc-shared-scan').forEach(btn => btn.onclick = () => {
+    const i = Number(btn.dataset.i);
+    startScan(({ dataUrl }) => {
+      acceptSharedBack(i, dataUrl);
+      showToast('Card scanned');
+    });
   });
   wrap.querySelectorAll('.rc-shared-remove').forEach(btn => btn.onclick = () => {
     const r = pendingRarities[btn.dataset.i];

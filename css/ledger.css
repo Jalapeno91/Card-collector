@@ -11,7 +11,12 @@
 
   .app{ display:flex; min-height:100vh; }
 
-  .sidebar{ width:250px; flex-shrink:0; background:var(--ink-2); border-right:1px solid var(--hairline); padding:28px 0 20px; display:flex; flex-direction:column; transition: background-color .35s ease, border-color .35s ease; }
+  .sidebar{
+    width:250px; flex-shrink:0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(201,162,39,.07), transparent 60%), var(--ink-2);
+    border-right:1px solid var(--hairline); padding:28px 0 20px; display:flex; flex-direction:column;
+    transition: background-color .35s ease, border-color .35s ease;
+  }
   .brand{ padding:0 22px 20px; border-bottom:1px solid var(--hairline); margin-bottom:8px; cursor:pointer; }
   .brand .mark{ font-family:'Fraunces',serif; font-size:14px; letter-spacing:.14em; color:var(--brass); text-transform:uppercase; }
   .brand h1{ font-family:'Fraunces',serif; font-weight:600; font-size:25px; margin:6px 0 0; }
@@ -37,7 +42,14 @@
      narrow window, the whole page grew wider than the window and scrolled
      sideways. The toolbar and the Ledger table below both earn their keep
      within whatever width this leaves them. */
-  .main{ flex:1; min-width:0; padding:34px 40px 48px; max-width:1140px; }
+  /* The same fine diagonal grain the album already prints on a card's
+     generated back (see .card-back.generated::after below), reused here at a
+     much fainter opacity so a screen with only a tile or two doesn't read as
+     an unfinished void. */
+  .main{
+    flex:1; min-width:0; padding:34px 40px 48px; max-width:1140px;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.014) 0 3px, transparent 3px 9px);
+  }
   .crumbs{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--parchment-dim); margin-bottom:18px; }
   .crumbs span{ cursor:pointer; }
   .crumbs span:hover{ color:var(--brass); }
@@ -129,6 +141,15 @@
   .field-row{ display:flex; gap:12px; }
   .field-row .field{ flex:1; }
   .field input[type=color]{ padding:3px; height:38px; cursor:pointer; }
+  /* The field itself already picks up the dark background and border from
+     the rule above; only the browser's own "Choose File" button is left
+     drawing itself in the OS's default grey, so it alone needs restyling. */
+  input[type=file]::file-selector-button{
+    background:transparent; border:1px solid var(--hairline); color:var(--parchment-dim);
+    padding:9px 16px; border-radius:var(--radius); cursor:pointer; font-size:13px;
+    font-family:inherit; margin-right:10px;
+  }
+  input[type=file]::file-selector-button:hover{ color:var(--parchment); border-color:var(--parchment-dim); }
   .modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
   .btn-ghost{ background:transparent; border:1px solid var(--hairline); color:var(--parchment-dim); padding:9px 16px; border-radius:var(--radius); cursor:pointer; font-size:14px; }
   .btn-ghost:hover{ color:var(--parchment); border-color:var(--parchment-dim); }
@@ -158,7 +179,9 @@
   .rarity-add-row input[type=number]{ width:84px; flex:none; }
 
   .rarity-shared-toggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--parchment-dim); cursor:pointer; }
-  .rarity-shared-photo{ align-items:center; gap:10px; }
+  .rarity-shared-photo .btn-scan{ margin-bottom:6px; padding:8px 12px; font-size:12px; }
+  .rarity-shared-photo input[type=file]{ display:block; width:100%; font-size:12px; color:var(--parchment-dim); margin-bottom:8px; }
+  .rarity-shared-preview-row{ display:flex; align-items:center; gap:10px; }
   .rarity-shared-preview{ width:56px; height:78px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0; }
   .shared-back-note{ font-size:12px; color:var(--parchment-dim); font-style:italic; margin-bottom:8px; }
 
