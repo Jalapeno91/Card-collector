@@ -52,6 +52,8 @@ function subcollectionRow(s, collectionId, position){
       name: r.name,
       color: r.color,
       total: r.total ?? null,
+      namePrefix: r.namePrefix || '',
+      defaultEffect: r.defaultEffect || 'matte',
       sharedBack: !!r.sharedBack,
       hasSharedBack: !!r.hasSharedBack,
       sharedBackUpdatedAt: blobStamps.get(rarityBackPhotoKey(s.id, r.id)) || null,

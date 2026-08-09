@@ -1,4 +1,4 @@
-import { el, uid, escapeHtml, showToast, readImageFile, DEFAULT_RARITY_PALETTE } from '../ui.js';
+import { el, uid, escapeHtml, showToast, readImageFile, DEFAULT_RARITY_PALETTE, EFFECTS } from '../ui.js';
 import { nav, editing, getColl, getSub } from '../state.js';
 import { saveData, getBlob, setBlob, deleteBlob, boxPhotoKey, rarityBackPhotoKey } from '../store.js';
 import { openConfirm } from './confirm.js';
@@ -38,6 +38,12 @@ function renderRarityManageList(){
         <button data-i="${i}" data-dir="down" class="rc-move" type="button" title="Move down" ${i===pendingRarities.length-1?'disabled':''}>▼</button>
         <button data-i="${i}" class="rc-del" type="button" title="Delete rarity">✕</button>
       </div>
+      <div class="rarity-defaults-row">
+        <input type="text" data-i="${i}" class="rc-prefix" placeholder="Name prefix for every ${escapeHtml(r.name)} card, e.g. WH-SSR-" value="${escapeHtml(r.namePrefix||'')}" />
+        <select data-i="${i}" class="rc-effect" title="Default finish for every ${escapeHtml(r.name)} card">
+          ${Object.entries(EFFECTS).map(([key,v]) => `<option value="${key}" ${(r.defaultEffect||'matte')===key?'selected':''}>${v.glyph} ${v.label}</option>`).join('')}
+        </select>
+      </div>
       <label class="rarity-shared-toggle">
         <input type="checkbox" data-i="${i}" class="rc-shared-toggle" ${r.sharedBack?'checked':''} />
         Use one shared back image for every "${escapeHtml(r.name)}" card
@@ -68,6 +74,8 @@ function renderRarityManageList(){
     const v = inp.value.trim();
     pendingRarities[inp.dataset.i].total = v === '' ? null : Math.max(0, parseInt(v,10));
   });
+  wrap.querySelectorAll('.rc-prefix').forEach(inp => inp.oninput = () => { pendingRarities[inp.dataset.i].namePrefix = inp.value; });
+  wrap.querySelectorAll('.rc-effect').forEach(sel => sel.onchange = () => { pendingRarities[sel.dataset.i].defaultEffect = sel.value; });
   wrap.querySelectorAll('.rc-move').forEach(btn => btn.onclick = () => {
     const i = Number(btn.dataset.i);
     const j = btn.dataset.dir === 'up' ? i - 1 : i + 1;
@@ -128,7 +136,7 @@ el('addRarityBtn').onclick = () => {
   if (!name) return;
   const totalRaw = el('newRarityTotal').value.trim();
   const total = totalRaw === '' ? null : Math.max(0, parseInt(totalRaw,10));
-  pendingRarities.push({ id: uid(), name, color: el('newRarityColor').value, total, sharedBack: false, hasSharedBack: false });
+  pendingRarities.push({ id: uid(), name, color: el('newRarityColor').value, total, namePrefix: '', defaultEffect: 'matte', sharedBack: false, hasSharedBack: false });
   el('newRarityName').value = '';
   el('newRarityTotal').value = '';
   el('newRarityColor').value = DEFAULT_RARITY_PALETTE[Math.floor(Math.random()*DEFAULT_RARITY_PALETTE.length)];

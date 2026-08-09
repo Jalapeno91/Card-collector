@@ -6,6 +6,15 @@ import { openConfirm } from './confirm.js';
 import { render } from '../render.js';
 
 let selectedEffect = 'matte';
+// True once the person has clicked an effect themselves in this session, so a
+// rarity's default finish (applied when adding a card) never overrides a
+// choice they already made.
+let effectTouched = false;
+// Same idea for the name field: a prefix we filled in ourselves should still
+// be replaced if the rarity is switched again, but a name the person actually
+// typed — even if it happens to still start with the old prefix — should not.
+let nameAutoFilled = false;
+el('fName').addEventListener('input', () => { nameAutoFilled = false; });
 let pendingLinkedSlots = [];
 let pendingFront = { dataUrl: null, shape: null, remove: false };
 let pendingBack = { dataUrl: null, shape: null, remove: false };
@@ -76,7 +85,7 @@ function renderEffectPicker(){
     <div class="effect-opt${selectedEffect===key?' sel':''}" data-key="${key}">
       <span class="glyph">${v.glyph}</span>${v.label}
     </div>`).join('');
-  wrap.querySelectorAll('.effect-opt').forEach(o => o.onclick = () => { selectedEffect = o.dataset.key; renderEffectPicker(); });
+  wrap.querySelectorAll('.effect-opt').forEach(o => o.onclick = () => { selectedEffect = o.dataset.key; effectTouched = true; renderEffectPicker(); });
 }
 
 function populateRaritySelect(collId, subId){
@@ -101,7 +110,25 @@ function updateBackPhotoVisibility(){
   el('fBackPhotoSharedNote').style.display = shared ? '' : 'none';
 }
 
-el('fRarity').onchange = updateBackPhotoVisibility;
+// Only ever fires while adding a new card — an existing card's name and
+// finish are its own, and picking a different rarity while editing one
+// should never silently rewrite them.
+function applyRarityDefaults(){
+  if (editing.cardId) return;
+  const sub = getSub(editing.collId, editing.subId);
+  const rarity = sub ? (sub.rarities||[]).find(r => r.name === el('fRarity').value) : null;
+  if (!rarity) return;
+  if ((nameAutoFilled || !el('fName').value.trim()) && rarity.namePrefix){
+    el('fName').value = rarity.namePrefix;
+    nameAutoFilled = true;
+  }
+  if (!effectTouched && rarity.defaultEffect && EFFECTS[rarity.defaultEffect]){
+    selectedEffect = rarity.defaultEffect;
+    renderEffectPicker();
+  }
+}
+
+el('fRarity').onchange = () => { updateBackPhotoVisibility(); applyRarityDefaults(); };
 
 /* ── linked slots ───────────────────────────────────────────────────────── */
 
@@ -186,7 +213,9 @@ export function openAddCard(collId, subId, prefill){
     if (prefill.number != null) el('fNumber').value = prefill.number;
   }
   updateBackPhotoVisibility();
-  selectedEffect = 'matte'; renderEffectPicker();
+  selectedEffect = 'matte'; effectTouched = false; renderEffectPicker();
+  nameAutoFilled = false;
+  applyRarityDefaults();
   resetPhotoFields();
   clearLinkedSlots();
   el('deleteCardBtn').style.display = 'none';

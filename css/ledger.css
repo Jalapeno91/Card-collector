@@ -178,6 +178,10 @@
   .rarity-add-row{ display:flex; gap:8px; }
   .rarity-add-row input[type=number]{ width:84px; flex:none; }
 
+  .rarity-defaults-row{ display:flex; gap:8px; }
+  .rarity-defaults-row input[type=text]{ flex:1; min-width:0; font-size:12.5px; background:var(--panel); border:1px solid var(--hairline); color:var(--parchment); padding:7px 10px; border-radius:var(--radius); }
+  .rarity-defaults-row select{ flex:none; width:132px; font-size:12.5px; background:var(--panel); border:1px solid var(--hairline); color:var(--parchment); padding:7px 8px; border-radius:var(--radius); }
+
   .rarity-shared-toggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--parchment-dim); cursor:pointer; }
   .rarity-shared-photo .btn-scan{ margin-bottom:6px; padding:8px 12px; font-size:12px; }
   .rarity-shared-photo input[type=file]{ display:block; width:100%; font-size:12px; color:var(--parchment-dim); margin-bottom:8px; }
