@@ -13,7 +13,7 @@
 
 import { el, escapeHtml } from './ui.js';
 import { view, buildBinderSlots, getColl } from './state.js';
-import { getBlob, photoKey, photoBackKey } from './store.js';
+import { getBlob, photoKey, photoBackKey, rarityBackPhotoKey } from './store.js';
 import { openViewer, goToLinkedCard } from './viewer.js';
 import { shapeStyle } from './lib/shape.js';
 
@@ -75,27 +75,36 @@ function frontPocketHtml(slot, coll){
     `data-id="${c.id}"`);
 }
 
-function backPocketHtml(slot, coll){
+// A rarity with "shared back image" turned on supplies the back photo for
+// every card in it, so the album checks the rarity before falling back to the
+// card's own back photo.
+function cardHasBack(c, sub){
+  const rarity = (sub.rarities||[]).find(r => r.name === c.rarity);
+  return rarity && rarity.sharedBack ? !!rarity.hasSharedBack : !!c.hasBackPhoto;
+}
+
+function backPocketHtml(slot, coll, sub){
   if (slot.blank || slot.linked || !slot.card){
     return sleeveHtml('<div class="pocket-face vacant"></div>');
   }
   const c = slot.card;
+  const hasBack = cardHasBack(c, sub);
   // No back photo yet: a generated back in the collection's colour, so the
   // page still reads as a page rather than a grid of holes.
   const shpBack = shapeStyle(c.shape);
   return sleeveHtml(
-    `<div class="pocket-face card-back${c.hasBackPhoto ? '' : ' generated'}" data-face="back-${c.id}" style="background:linear-gradient(160deg, #14161d 0%, ${coll.color} 130%);${shpBack ? ` clip-path:${shpBack.clipPath};` : ''}">
-       ${c.hasBackPhoto ? '' : '<div class="card-back-mark"></div>'}
+    `<div class="pocket-face card-back${hasBack ? '' : ' generated'}" data-face="back-${c.id}" style="background:linear-gradient(160deg, #14161d 0%, ${coll.color} 130%);${shpBack ? ` clip-path:${shpBack.clipPath};` : ''}">
+       ${hasBack ? '' : '<div class="card-back-mark"></div>'}
      </div>`,
     `data-id="${c.id}"`);
 }
 
 /* ── one leaf ───────────────────────────────────────────────────────────── */
 
-function leafHtml(slots, side, coll){
+function leafHtml(slots, side, coll, sub){
   if (!slots) return '';
   const ordered = side === 'back' ? mirrorRows(slots) : slots;
-  const pockets = ordered.map(s => side === 'back' ? backPocketHtml(s, coll) : frontPocketHtml(s, coll)).join('');
+  const pockets = ordered.map(s => side === 'back' ? backPocketHtml(s, coll, sub) : frontPocketHtml(s, coll)).join('');
   return `<div class="album-leaf ${side==='back'?'is-back':'is-front'}">${pockets}</div>`;
 }
 
@@ -111,14 +120,20 @@ function coverHtml(coll, sub, which){
 
 // Fills in photos once they come back from IndexedDB. Scoped to `root` so the
 // leaf being turned and the leaf underneath it never write to each other.
-function loadLeafPhotos(root, slots, side){
+function loadLeafPhotos(root, slots, side, sub){
   if (!slots) return;
   slots.forEach(slot => {
     const c = slot.card;
     if (!c) return;
-    const key = side === 'back'
-      ? (c.hasBackPhoto ? photoBackKey(c.id) : null)
-      : (c.hasPhoto ? photoKey(c.id) : null);
+    let key = null;
+    if (side === 'back'){
+      const rarity = (sub.rarities||[]).find(r => r.name === c.rarity);
+      key = rarity && rarity.sharedBack
+        ? (rarity.hasSharedBack ? rarityBackPhotoKey(sub.id, rarity.id) : null)
+        : (c.hasBackPhoto ? photoBackKey(c.id) : null);
+    } else {
+      key = c.hasPhoto ? photoKey(c.id) : null;
+    }
     if (!key) return;
     getBlob(key).then(value => {
       if (!value) return;
@@ -173,11 +188,11 @@ export function renderAlbumView(coll, sub){
     <div class="album" data-side="${view.albumMobileSide}">
       <div class="album-book" id="albumBook">
         <div class="album-side album-left" id="albumLeft">
-          ${leftLeaf ? leafHtml(leftLeaf, 'back', coll) : coverHtml(coll, sub, 'front')}
+          ${leftLeaf ? leafHtml(leftLeaf, 'back', coll, sub) : coverHtml(coll, sub, 'front')}
         </div>
         <div class="album-spine"><i></i><i></i><i></i></div>
         <div class="album-side album-right" id="albumRight">
-          ${rightLeaf ? leafHtml(rightLeaf, 'front', coll) : coverHtml(coll, sub, 'back')}
+          ${rightLeaf ? leafHtml(rightLeaf, 'front', coll, sub) : coverHtml(coll, sub, 'back')}
         </div>
       </div>
       <div class="binder-pager" id="albumPager"></div>
@@ -186,8 +201,8 @@ export function renderAlbumView(coll, sub){
 
   const leftEl = el('albumLeft');
   const rightEl = el('albumRight');
-  loadLeafPhotos(leftEl, leftLeaf, 'back');
-  loadLeafPhotos(rightEl, rightLeaf, 'front');
+  loadLeafPhotos(leftEl, leftLeaf, 'back', sub);
+  loadLeafPhotos(rightEl, rightLeaf, 'front', sub);
 
   bindSleeves(wrap, coll, sub);
   paintPager(coll, sub, leaves);
@@ -268,26 +283,26 @@ function turnTo(target, step, coll, sub, leaves){
   if (step > 0){
     // Forward: the right leaf swings left, front face first, landing on its back.
     turn.innerHTML =
-      `<div class="album-turn-face a">${leafHtml(movingLeaf, 'front', coll)}</div>` +
-      `<div class="album-turn-face b">${leafHtml(movingLeaf, 'back', coll)}</div>`;
+      `<div class="album-turn-face a">${leafHtml(movingLeaf, 'front', coll, sub)}</div>` +
+      `<div class="album-turn-face b">${leafHtml(movingLeaf, 'back', coll, sub)}</div>`;
     const nextRight = target < leaves.length ? leaves[target] : null;
-    rightEl.innerHTML = nextRight ? leafHtml(nextRight, 'front', coll) : coverHtml(coll, sub, 'back');
-    loadLeafPhotos(rightEl, nextRight, 'front');
+    rightEl.innerHTML = nextRight ? leafHtml(nextRight, 'front', coll, sub) : coverHtml(coll, sub, 'back');
+    loadLeafPhotos(rightEl, nextRight, 'front', sub);
   } else {
     // Backward: the left leaf swings right, back face first, landing on its front.
     turn.innerHTML =
-      `<div class="album-turn-face a">${leafHtml(movingLeaf, 'back', coll)}</div>` +
-      `<div class="album-turn-face b">${leafHtml(movingLeaf, 'front', coll)}</div>`;
+      `<div class="album-turn-face a">${leafHtml(movingLeaf, 'back', coll, sub)}</div>` +
+      `<div class="album-turn-face b">${leafHtml(movingLeaf, 'front', coll, sub)}</div>`;
     const nextLeft = target > 0 ? leaves[target-1] : null;
-    leftEl.innerHTML = nextLeft ? leafHtml(nextLeft, 'back', coll) : coverHtml(coll, sub, 'front');
-    loadLeafPhotos(leftEl, nextLeft, 'back');
+    leftEl.innerHTML = nextLeft ? leafHtml(nextLeft, 'back', coll, sub) : coverHtml(coll, sub, 'front');
+    loadLeafPhotos(leftEl, nextLeft, 'back', sub);
   }
 
   book.appendChild(turn);
   const faceA = turn.querySelector('.album-turn-face.a');
   const faceB = turn.querySelector('.album-turn-face.b');
-  loadLeafPhotos(faceA, movingLeaf, step > 0 ? 'front' : 'back');
-  loadLeafPhotos(faceB, movingLeaf, step > 0 ? 'back' : 'front');
+  loadLeafPhotos(faceA, movingLeaf, step > 0 ? 'front' : 'back', sub);
+  loadLeafPhotos(faceB, movingLeaf, step > 0 ? 'back' : 'front', sub);
 
   // Settle the turn without rebuilding the album.
   //

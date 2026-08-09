@@ -18,7 +18,7 @@ export async function saveData(){
 
 export {
   getBlob, setBlob, deleteBlob,
-  logoKey, boxPhotoKey, photoKey, photoBackKey,
+  logoKey, boxPhotoKey, photoKey, photoBackKey, rarityBackPhotoKey,
 } from './storage/local.js';
 
 /* ── backup / restore ───────────────────────────────────────────────────── */
@@ -30,6 +30,7 @@ export async function collectAllPhotos(){
     if (c.hasLogo) keys.push(local.logoKey(c.id));
     (c.subcollections||[]).forEach(s => {
       if (s.hasBoxPhoto) keys.push(local.boxPhotoKey(s.id));
+      (s.rarities||[]).forEach(r => { if (r.hasSharedBack) keys.push(local.rarityBackPhotoKey(s.id, r.id)); });
       (s.cards||[]).forEach(card => {
         if (card.hasPhoto) keys.push(local.photoKey(card.id));
         if (card.hasBackPhoto) keys.push(local.photoBackKey(card.id));

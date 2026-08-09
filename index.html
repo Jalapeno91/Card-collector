@@ -151,13 +151,16 @@
         <button type="button" class="btn-ghost" id="removePhotoBtn" style="display:none;">Remove photo</button>
       </div>
     </div>
-    <div class="field">
+    <div class="field" id="fBackPhotoField">
       <label>Card photo — back (optional — flip the 3D viewer to see it)</label>
-      <button type="button" class="btn-scan" id="scanPhotoBackBtn">⛶ Scan card with camera</button>
-      <input id="fPhotoBackInput" type="file" accept="image/*" />
-      <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
-        <div id="fPhotoBackPreview" style="width:56px; height:78px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0;"></div>
-        <button type="button" class="btn-ghost" id="removePhotoBackBtn" style="display:none;">Remove photo</button>
+      <div id="fBackPhotoSharedNote" class="shared-back-note" style="display:none;">This rarity uses one shared back image for every card. Set or change it from the series screen.</div>
+      <div id="fBackPhotoControls">
+        <button type="button" class="btn-scan" id="scanPhotoBackBtn">⛶ Scan card with camera</button>
+        <input id="fPhotoBackInput" type="file" accept="image/*" />
+        <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+          <div id="fPhotoBackPreview" style="width:56px; height:78px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0;"></div>
+          <button type="button" class="btn-ghost" id="removePhotoBackBtn" style="display:none;">Remove photo</button>
+        </div>
       </div>
     </div>
     <div class="field">

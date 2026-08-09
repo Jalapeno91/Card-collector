@@ -89,6 +89,20 @@ function populateRaritySelect(collId, subId){
   }
 }
 
+// A rarity with "shared back image" turned on supplies its own back for every
+// card in it, so the per-card back-photo controls step aside in its favour —
+// the card's own back photo (if it had one before) is left alone in storage
+// and simply reappears if the rarity's toggle is switched off later.
+function updateBackPhotoVisibility(){
+  const sub = getSub(editing.collId, editing.subId);
+  const rarity = sub ? (sub.rarities||[]).find(r => r.name === el('fRarity').value) : null;
+  const shared = !!(rarity && rarity.sharedBack);
+  el('fBackPhotoControls').style.display = shared ? 'none' : '';
+  el('fBackPhotoSharedNote').style.display = shared ? '' : 'none';
+}
+
+el('fRarity').onchange = updateBackPhotoVisibility;
+
 /* ── linked slots ───────────────────────────────────────────────────────── */
 
 function pickDefaultLinkTarget(){
@@ -171,6 +185,7 @@ export function openAddCard(collId, subId, prefill){
     if (prefill.rarity) el('fRarity').value = prefill.rarity;
     if (prefill.number != null) el('fNumber').value = prefill.number;
   }
+  updateBackPhotoVisibility();
   selectedEffect = 'matte'; renderEffectPicker();
   resetPhotoFields();
   clearLinkedSlots();
@@ -189,6 +204,7 @@ export async function openEditCard(collId, subId, cardId){
   el('fNumber').value = c.number ?? '';
   populateRaritySelect(collId, subId);
   el('fRarity').value = c.rarity || '';
+  updateBackPhotoVisibility();
   selectedEffect = c.effect || 'matte'; renderEffectPicker();
   resetPhotoFields();
 

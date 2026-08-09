@@ -42,7 +42,20 @@ function subcollectionRow(s, collectionId, position){
     collectionId,
     name: s.name,
     totalInSet: s.totalInSet ?? null,
-    rarities: s.rarities || [],
+    // Rarities are re-shaped here (rather than stored verbatim) so a stray
+    // field left over from an older build never lingers in what gets synced,
+    // and so `hasSharedBack`/`sharedBackUpdatedAt` always reflect the blob
+    // that is actually on disk right now rather than whatever the in-memory
+    // tree happened to be carrying.
+    rarities: (s.rarities || []).map(r => ({
+      id: r.id,
+      name: r.name,
+      color: r.color,
+      total: r.total ?? null,
+      sharedBack: !!r.sharedBack,
+      hasSharedBack: !!r.hasSharedBack,
+      sharedBackUpdatedAt: blobStamps.get(rarityBackPhotoKey(s.id, r.id)) || null,
+    })),
     hasBoxPhoto: !!s.hasBoxPhoto,
     position,
     createdAt: s.createdAt || now(),
@@ -159,6 +172,7 @@ export const logoKey = collId => 'collection-logo:' + collId;
 export const boxPhotoKey = subId => 'box-photo:' + subId;
 export const photoKey = cardId => 'card-photo:' + cardId;
 export const photoBackKey = cardId => 'card-photo-back:' + cardId;
+export const rarityBackPhotoKey = (subId, rarityId) => 'rarity-back-photo:' + subId + ':' + rarityId;
 
 /* ── public API ─────────────────────────────────────────────────────────── */
 

@@ -141,16 +141,26 @@
   .effect-opt:hover{ border-color:var(--parchment-dim); color:var(--parchment); }
   .effect-opt.sel{ border-color:var(--brass); color:var(--brass); background:rgba(201,162,39,.08); }
 
-  .rarity-manage-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:12px; max-height:180px; overflow-y:auto; }
-  .rarity-manage-row{ display:flex; align-items:center; gap:8px; }
-  .rarity-manage-row input[type=text]{ flex:1; }
-  .rarity-manage-row input[type=color]{ width:40px; padding:2px; height:34px; }
-  .rarity-manage-row button{ background:none; border:none; color:var(--parchment-dim); cursor:pointer; }
-  .rarity-manage-row button:hover{ color:var(--rose); }
+  .rarity-manage-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:12px; max-height:260px; overflow-y:auto; }
+  .rarity-manage-row{ display:flex; flex-direction:column; gap:6px; padding:8px; border:1px solid var(--hairline); border-radius:var(--radius); }
+  .rarity-manage-main{ display:flex; align-items:center; gap:8px; }
+  .rarity-manage-main input[type=text]{ flex:1; }
+  .rarity-manage-main input[type=color]{ width:40px; padding:2px; height:34px; }
+  .rarity-manage-main button{ background:none; border:none; color:var(--parchment-dim); cursor:pointer; }
+  .rarity-manage-main button:hover{ color:var(--rose); }
+  .rarity-manage-main button.rc-move{ font-size:11px; }
+  .rarity-manage-main button.rc-move:hover{ color:var(--parchment); }
+  .rarity-manage-main button.rc-move:disabled{ opacity:.25; cursor:default; }
+  .rarity-manage-main button.rc-move:disabled:hover{ color:var(--parchment-dim); }
   .coll-logo{ display:inline-block; border-radius:6px; background:var(--panel-2); background-size:cover; background-position:center; vertical-align:middle; flex-shrink:0; border:1px solid var(--hairline); }
-  .rarity-manage-row input.rc-total{ width:84px; flex:none; }
+  .rarity-manage-main input.rc-total{ width:84px; flex:none; }
   .rarity-add-row{ display:flex; gap:8px; }
   .rarity-add-row input[type=number]{ width:84px; flex:none; }
+
+  .rarity-shared-toggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--parchment-dim); cursor:pointer; }
+  .rarity-shared-photo{ align-items:center; gap:10px; }
+  .rarity-shared-preview{ width:56px; height:78px; border-radius:4px; border:1px solid var(--hairline); background:var(--panel); background-size:cover; background-position:center; flex-shrink:0; }
+  .shared-back-note{ font-size:12px; color:var(--parchment-dim); font-style:italic; margin-bottom:8px; }
 
   .link-row{ display:grid; grid-template-columns: 1fr 1fr 1fr 66px 28px; gap:6px; margin-bottom:8px; align-items:center; }
   .link-row select, .link-row input{ font-size:12px; padding:7px 8px; }

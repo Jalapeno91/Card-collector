@@ -2,7 +2,7 @@
 
 import { el, showToast, EFFECTS } from './ui.js';
 import { nav, getColl, getSub } from './state.js';
-import { getBlob, photoKey, photoBackKey } from './store.js';
+import { getBlob, photoKey, photoBackKey, rarityBackPhotoKey } from './store.js';
 import { openEditCard, confirmDeleteCard } from './modals/card.js';
 import { shapeStyle } from './lib/shape.js';
 
@@ -79,10 +79,15 @@ export async function openViewer(coll, sub, cardId){
   document.querySelector('.c-emblem').style.display = card.hasPhoto ? 'none' : '';
 
   // Back face: reset to a neutral placeholder, then fill in if a photo exists.
+  // A rarity with "shared back image" turned on supplies the photo instead of
+  // the card's own — the same one every card of that rarity shows.
+  const sharedBack = !!(rarity && rarity.sharedBack);
+  const backKey = sharedBack ? rarityBackPhotoKey(sub.id, rarity.id) : photoBackKey(card.id);
+  const hasBack = sharedBack ? !!rarity.hasSharedBack : !!card.hasBackPhoto;
   const cBaseBack = el('cBaseBack');
   cBaseBack.style.backgroundImage = 'none';
   cBaseBack.style.background = `linear-gradient(160deg, #14161d 0%, ${coll.color} 130%)`;
-  el('cBackPlaceholder').textContent = card.hasBackPhoto ? '' : 'No back photo added yet';
+  el('cBackPlaceholder').textContent = hasBack ? '' : 'No back photo added yet';
 
   flipped = false;
   resetTilt();
@@ -102,9 +107,9 @@ export async function openViewer(coll, sub, cardId){
     }catch(e){ /* fall back silently to the generated design already drawn above */ }
   }
 
-  if (card.hasBackPhoto){
+  if (hasBack){
     try{
-      const value = await getBlob(photoBackKey(card.id));
+      const value = await getBlob(backKey);
       if (value){
         cBaseBack.style.background = 'none';
         cBaseBack.style.backgroundImage = `url(${value})`;

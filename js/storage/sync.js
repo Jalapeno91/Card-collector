@@ -237,6 +237,9 @@ async function pullBlobs(userId){
   rows.subcollections.forEach(s => {
     if (s.deletedAt) return;
     wanted.push({ key: local.boxPhotoKey(s.id), has: s.hasBoxPhoto, stamp: s.boxPhotoUpdatedAt });
+    (s.rarities || []).forEach(r => {
+      wanted.push({ key: local.rarityBackPhotoKey(s.id, r.id), has: r.hasSharedBack, stamp: r.sharedBackUpdatedAt });
+    });
   });
   rows.cards.forEach(c => {
     if (c.deletedAt) return;
