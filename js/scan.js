@@ -16,10 +16,11 @@
 // transparent, instead of the usual straightened JPEG.
 
 import { el, showToast } from './ui.js';
-import { findCardQuad, unwarpQuad, defaultQuad, findCardOutline, rasterizeOutline } from './lib/scan-detect.js';
+import { detectCardEdges, unwarpQuad, defaultQuad, findCardOutline, rasterizeOutline, intersect, pointLineDistance } from './lib/scan-detect.js';
 
 const HANDLE_RADIUS = 12;   // drawn size, in CSS pixels
 const GRAB_RADIUS = 34;     // how near a finger has to land to catch a handle
+const SNAP_RADIUS = 18;     // how near a detected edge/point has to be for a drag to lock onto it
 const LOUPE_RADIUS = 54;
 const LOUPE_ZOOM = 2.6;
 
@@ -29,6 +30,13 @@ let view = null;       // how photo coordinates map onto the canvas
 let dragging = -1;     // index of the corner under the finger, or -1
 let pointerId = null;
 let onCropped = null;  // what to call with the finished data URL
+
+// What a dragged corner/point can snap to, both in photo coordinates.
+// Rectangle mode: the straight lines the detector found (even ones that lost
+// out on forming the winning quad). Shape mode: the originally-traced
+// outline, frozen at detect time so edits don't chase their own tail.
+let detectedLines = [];
+let detectedOutline = null;
 
 let shapeMode = false;        // false = rectangle (default), true = a traced outline
 let downPoint = null;         // canvas-space pointerdown position, to tell a tap from a drag
@@ -183,6 +191,51 @@ function localPoint(e){
   return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
+// The point on a closed polyline nearest `p`, checking every edge rather
+// than just the vertices — used both to find where a tap should insert a
+// new shape-mode point, and to snap a shape-mode drag to the originally
+// traced outline.
+function nearestOnPolyline(p, pts){
+  let best = -1, bestDist = Infinity, bestPoint = null;
+  for (let i = 0; i < pts.length; i++){
+    const a = pts[i], b = pts[(i+1) % pts.length];
+    const dx = b.x-a.x, dy = b.y-a.y;
+    const t = Math.max(0, Math.min(1, dx||dy ? ((p.x-a.x)*dx + (p.y-a.y)*dy) / (dx*dx+dy*dy) : 0));
+    const point = { x: a.x+dx*t, y: a.y+dy*t };
+    const d = Math.hypot(point.x - p.x, point.y - p.y);
+    if (d < bestDist){ bestDist = d; best = i; bestPoint = point; }
+  }
+  return { segment: best, point: bestPoint, dist: bestDist };
+}
+
+// Locks a rectangle-mode drag onto the detected lines it's closing in on:
+// onto their intersection when two are close, onto just the one line
+// (sliding freely along it) when only one is, or left alone otherwise.
+function snapCorner(p, lines, radiusPhoto){
+  const upright = lines.filter(l => l.t < 45 || l.t >= 135);
+  const across  = lines.filter(l => l.t >= 45 && l.t < 135);
+  const nearest = (set) => set.reduce((best, l) => {
+    const d = pointLineDistance(l, p);
+    return (!best || d < best.dist) ? { line: l, dist: d } : best;
+  }, null);
+  const nu = nearest(upright), na = nearest(across);
+  const hitU = nu && nu.dist < radiusPhoto;
+  const hitA = na && na.dist < radiusPhoto;
+
+  if (hitU && hitA){
+    const corner = intersect(nu.line, na.line);
+    if (corner) return corner;
+  }
+  if (hitU || hitA){
+    const { line } = hitU ? nu : na;
+    const theta = line.t * Math.PI / 180;
+    // Project p onto the line: p minus its (signed) distance along the normal.
+    const signedDist = p.x*Math.cos(theta) + p.y*Math.sin(theta) - line.rho;
+    return { x: p.x - signedDist*Math.cos(theta), y: p.y - signedDist*Math.sin(theta) };
+  }
+  return p;
+}
+
 function bindCanvas(){
   const canvas = el('scanCanvas');
 
@@ -199,17 +252,10 @@ function bindCanvas(){
     // new point there instead, which the same gesture then drags into place.
     if (nearest < 0 && shapeMode){
       const pts = quad.map(toCanvas);
-      let bestSeg = -1, bestSegDist = GRAB_RADIUS;
-      for (let i = 0; i < pts.length; i++){
-        const a = pts[i], b = pts[(i+1) % pts.length];
-        const dx = b.x-a.x, dy = b.y-a.y;
-        const t = Math.max(0, Math.min(1, dx||dy ? ((p.x-a.x)*dx + (p.y-a.y)*dy) / (dx*dx+dy*dy) : 0));
-        const d = Math.hypot(a.x+dx*t - p.x, a.y+dy*t - p.y);
-        if (d < bestSegDist){ bestSegDist = d; bestSeg = i; }
-      }
-      if (bestSeg >= 0){
-        quad.splice(bestSeg+1, 0, toPhoto(p));
-        nearest = bestSeg+1;
+      const { segment, dist } = nearestOnPolyline(p, pts);
+      if (segment >= 0 && dist < GRAB_RADIUS){
+        quad.splice(segment+1, 0, toPhoto(p));
+        nearest = segment+1;
       }
     }
 
@@ -227,7 +273,16 @@ function bindCanvas(){
     if (dragging < 0 || e.pointerId !== pointerId) return;
     const local = localPoint(e);
     if (downPoint && Math.hypot(local.x-downPoint.x, local.y-downPoint.y) > 4) moved = true;
-    const p = toPhoto(local);
+    let p = toPhoto(local);
+    const radiusPhoto = SNAP_RADIUS / view.scale;
+    if (shapeMode){
+      if (detectedOutline && detectedOutline.length){
+        const near = nearestOnPolyline(p, detectedOutline);
+        if (near.dist < radiusPhoto) p = near.point;
+      }
+    } else if (detectedLines.length){
+      p = snapCorner(p, detectedLines, radiusPhoto);
+    }
     quad[dragging] = {
       x: Math.max(0, Math.min(photo.naturalWidth, p.x)),
       y: Math.max(0, Math.min(photo.naturalHeight, p.y)),
@@ -265,6 +320,7 @@ function close(){
   photo = null; quad = null; view = null;
   dragging = -1; pointerId = null;
   downPoint = null; moved = false; lastTap = { index: -1, time: 0 };
+  detectedLines = []; detectedOutline = null;
   setShapeMode(false);
   el('scanCaptureInput').value = '';
 }
@@ -279,8 +335,18 @@ async function detect(){
   setHint(shapeMode ? 'Tracing the outline…' : 'Finding the card…');
   await nextFrame();
   let found = null;
-  try{ found = shapeMode ? findCardOutline(photo) : findCardQuad(photo); }
-  catch(e){ found = null; }
+  detectedLines = [];
+  detectedOutline = null;
+  try{
+    if (shapeMode){
+      found = findCardOutline(photo);
+      if (found) detectedOutline = found.map(p => ({ x: p.x, y: p.y }));
+    } else {
+      const edges = detectCardEdges(photo);
+      found = edges.quad;
+      detectedLines = edges.lines;
+    }
+  }catch(e){ found = null; }
   quad = found || defaultQuad(photo.naturalWidth, photo.naturalHeight);
   setHint(found
     ? (shapeMode ? 'Traced an outline — drag points to fix it, tap an edge to add one, tap a point twice to remove it'

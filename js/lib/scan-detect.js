@@ -20,8 +20,9 @@ const OUT_MAX = 900;      // matches the size ordinary card photos are stored at
 
 const THETA_BINS = 180;   // one accumulator column per degree of line angle
 const VOTE_SPREAD = 4;    // each edge pixel votes for angles this many degrees either side
-const EDGE_FRACTION = 0.12; // the strongest 12% of pixels count as edges
-const CANDIDATES_PER_AXIS = 8;
+const EDGE_FRACTION = 0.15; // the strongest 15% of pixels count as edges
+const CANDIDATES_PER_AXIS = 10;
+const OUTLINE_SUPPORT_MIN = 0.48; // a candidate quad needs at least this much of its outline sitting on real edge pixels
 
 /* ── image → numbers ────────────────────────────────────────────────────── */
 
@@ -202,13 +203,23 @@ function extractLines(h, limit){
 
 /* ── lines → a quadrilateral ────────────────────────────────────────────── */
 
-function intersect(a, b){
+// Exported so the manual-correction UI can snap a dragged corner to the
+// intersection of the two nearby lines it's closing in on.
+export function intersect(a, b){
   const ta = a.t * Math.PI / THETA_BINS, tb = b.t * Math.PI / THETA_BINS;
   const ca = Math.cos(ta), sa = Math.sin(ta);
   const cb = Math.cos(tb), sb = Math.sin(tb);
   const det = ca*sb - sa*cb;
   if (Math.abs(det) < 1e-6) return null;   // parallel: no single crossing point
   return { x: (a.rho*sb - sa*b.rho) / det, y: (ca*b.rho - a.rho*cb) / det };
+}
+
+// Perpendicular distance from a point to one of these lines — how the
+// manual-correction UI decides whether a dragged corner is close enough to
+// snap.
+export function pointLineDistance(line, p){
+  const theta = line.t * Math.PI / THETA_BINS;
+  return Math.abs(p.x*Math.cos(theta) + p.y*Math.sin(theta) - line.rho);
 }
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -249,7 +260,7 @@ function isConvex(pts){
 // Rejects quads that no photo of a card could produce: corners far outside the
 // frame, shapes too small or too slanted, sides that disagree wildly in length.
 function plausible(quad, width, height){
-  const marginX = width * 0.06, marginY = height * 0.06;
+  const marginX = width * 0.08, marginY = height * 0.08;
   for (const p of quad){
     if (p.x < -marginX || p.x > width + marginX) return false;
     if (p.y < -marginY || p.y > height + marginY) return false;
@@ -258,20 +269,20 @@ function plausible(quad, width, height){
 
   const area = polygonArea(quad);
   const frac = area / (width * height);
-  if (frac < 0.06 || frac > 0.98) return false;
+  if (frac < 0.05 || frac > 0.98) return false;
 
   for (let i = 0; i < 4; i++){
     const prev = quad[(i+3) % 4], here = quad[i], next = quad[(i+1) % 4];
     const v1 = { x: prev.x-here.x, y: prev.y-here.y };
     const v2 = { x: next.x-here.x, y: next.y-here.y };
     const cosA = (v1.x*v2.x + v1.y*v2.y) / (Math.hypot(v1.x,v1.y) * Math.hypot(v2.x,v2.y) || 1);
-    if (Math.abs(cosA) > 0.6) return false;   // corner outside roughly 53°–127°
+    if (Math.abs(cosA) > 0.68) return false;   // corner outside roughly 47°–133°
   }
 
   const top = dist(quad[0], quad[1]), bottom = dist(quad[3], quad[2]);
   const left = dist(quad[0], quad[3]), right = dist(quad[1], quad[2]);
-  if (Math.min(top,bottom) / Math.max(top,bottom) < 0.55) return false;
-  if (Math.min(left,right) / Math.max(left,right) < 0.55) return false;
+  if (Math.min(top,bottom) / Math.max(top,bottom) < 0.48) return false;
+  if (Math.min(left,right) / Math.max(left,right) < 0.48) return false;
   return true;
 }
 
@@ -328,25 +339,31 @@ export function defaultQuad(width, height){
   return [{ x, y }, { x: x+w, y }, { x: x+w, y: y+h }, { x, y: y+h }];
 }
 
-// Returns the card's four corners in the original photo's coordinates, ordered
-// clockwise from the top-left — or null when nothing convincing was found.
-export function findCardQuad(img){
+// Returns the card's candidate edges: `quad` (its four corners in the
+// original photo's coordinates, ordered clockwise from the top-left, or null
+// when nothing convincing was found) and `lines`, the straight lines the
+// detector weighed along the way, in the same photo coordinates as the quad
+// and in the `{ t, rho, votes }` shape `intersect`/`pointLineDistance`
+// expect. Kept so manual correction can offer them as snap targets even when
+// no quad won outright.
+export function detectCardEdges(img){
   const { canvas, scale } = drawScaled(img, WORK_MAX);
   const width = canvas.width, height = canvas.height;
-  if (width < 24 || height < 24) return null;
+  if (width < 24 || height < 24) return { quad: null, lines: [] };
 
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const gray = blur(grayscale(ctx.getImageData(0, 0, width, height)), width, height, 2);
   const { mag, dir } = sobel(gray, width, height);
   const threshold = edgeThreshold(mag, EDGE_FRACTION);
-  if (!Number.isFinite(threshold)) return null;
+  if (!Number.isFinite(threshold)) return { quad: null, lines: [] };
 
   const lines = extractLines(hough(mag, dir, width, height, threshold), 30);
   // A line's angle here is that of its perpendicular, so the near-upright lines
   // are the ones whose perpendicular points sideways.
   const upright = lines.filter(l => l.t < 45 || l.t >= 135).slice(0, CANDIDATES_PER_AXIS);
   const across  = lines.filter(l => l.t >= 45 && l.t < 135).slice(0, CANDIDATES_PER_AXIS);
-  if (upright.length < 2 || across.length < 2) return null;
+  const photoLines = upright.concat(across).map(l => ({ t: l.t, rho: l.rho / scale, votes: l.votes }));
+  if (upright.length < 2 || across.length < 2) return { quad: null, lines: photoLines };
 
   const minGapX = width * 0.15, minGapY = height * 0.15;
   const shortlist = [];
@@ -368,7 +385,7 @@ export function findCardQuad(img){
       }
     }
   }
-  if (!shortlist.length) return null;
+  if (!shortlist.length) return { quad: null, lines: photoLines };
 
   // Support is the expensive test, so only the geometrically promising quads
   // earn one.
@@ -376,13 +393,19 @@ export function findCardQuad(img){
   let best = null;
   for (const cand of shortlist.slice(0, 40)){
     const support = outlineSupport(cand.quad, mag, width, height, threshold);
-    if (support < 0.55) continue;
+    if (support < OUTLINE_SUPPORT_MIN) continue;
     const score = support * support * Math.sqrt(cand.areaFrac) * shapeBonus(cand.quad);
     if (!best || score > best.score) best = { quad: cand.quad, score };
   }
-  if (!best) return null;
+  if (!best) return { quad: null, lines: photoLines };
 
-  return best.quad.map(p => ({ x: p.x / scale, y: p.y / scale }));
+  const quad = best.quad.map(p => ({ x: p.x / scale, y: p.y / scale }));
+  return { quad, lines: photoLines };
+}
+
+// Returns just the four corners — the shape most callers actually want.
+export function findCardQuad(img){
+  return detectCardEdges(img).quad;
 }
 
 /* ── an outline of any shape ────────────────────────────────────────────── */
@@ -394,8 +417,8 @@ export function findCardQuad(img){
 // same way, with no separate code path for either.
 
 const OUTLINE_SAMPLES = 72;     // rays cast from the blob's centre, one per 5°
-const OUTLINE_MIN_POINTS = 10;  // fewer surviving rays than this and the trace is too broken to trust
-const OUTLINE_AREA_MIN = 0.04;  // plausibility bounds, mirrors plausible()'s area check above
+const OUTLINE_MIN_POINTS = 8;   // fewer surviving rays than this and the trace is too broken to trust
+const OUTLINE_AREA_MIN = 0.03;  // plausibility bounds, mirrors plausible()'s area check above
 const OUTLINE_AREA_MAX = 0.92;
 
 // Colour statistics of a thin ring around the photo's edge — on the
