@@ -20,7 +20,8 @@ import { detectCardEdges, unwarpQuad, defaultQuad, findCardOutline, rasterizeOut
 
 const HANDLE_RADIUS = 12;   // drawn size, in CSS pixels
 const GRAB_RADIUS = 34;     // how near a finger has to land to catch a handle
-const SNAP_RADIUS = 18;     // how near a detected edge/point has to be for a drag to lock onto it
+const SNAP_RADIUS = 11;     // how near a detected edge/point has to be for a drag to lock onto it
+const SNAP_CANDIDATES_PER_AXIS = 3; // only the strongest lines on each axis are snap targets — weak/noisy ones from a loosened detection pass shouldn't grab a finger
 const LOUPE_RADIUS = 54;
 const LOUPE_ZOOM = 2.6;
 
@@ -212,8 +213,11 @@ function nearestOnPolyline(p, pts){
 // onto their intersection when two are close, onto just the one line
 // (sliding freely along it) when only one is, or left alone otherwise.
 function snapCorner(p, lines, radiusPhoto){
-  const upright = lines.filter(l => l.t < 45 || l.t >= 135);
-  const across  = lines.filter(l => l.t >= 45 && l.t < 135);
+  // `lines` arrives sorted strongest-first within each axis (scan-detect.js
+  // sorts by vote count before handing them over), so slicing here keeps
+  // just the lines most likely to be the card's real border.
+  const upright = lines.filter(l => l.t < 45 || l.t >= 135).slice(0, SNAP_CANDIDATES_PER_AXIS);
+  const across  = lines.filter(l => l.t >= 45 && l.t < 135).slice(0, SNAP_CANDIDATES_PER_AXIS);
   const nearest = (set) => set.reduce((best, l) => {
     const d = pointLineDistance(l, p);
     return (!best || d < best.dist) ? { line: l, dist: d } : best;
