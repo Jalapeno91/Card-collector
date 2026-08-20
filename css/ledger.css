@@ -296,6 +296,30 @@
       rgba(255,246,214,.55), rgba(255,214,130,.14) 22%, transparent 44%);
     mix-blend-mode: screen;
   }
+  /* Silver foil: same construction as gold foil above, just re-tinted cool
+     and neutral instead of warm. */
+  .fx-silver::before{
+    content:''; position:absolute; inset:-70px;
+    background:
+      repeating-linear-gradient(12deg,
+        rgba(255,255,255,.13) 0 1px, rgba(0,0,0,.13) 1px 3px),
+      repeating-linear-gradient(calc(102deg + var(--ry,0)*0.5deg),
+        rgba(40,42,48,.42)    0px,
+        rgba(130,134,142,.34) 16px,
+        rgba(222,226,232,.62) 30px,
+        rgba(248,250,253,.72) 36px,
+        rgba(222,226,232,.62) 42px,
+        rgba(130,134,142,.34) 56px,
+        rgba(40,42,48,.42)    72px);
+    transform: translate(calc(var(--ry,0)*3px), calc(var(--rx,0)*3px));
+    mix-blend-mode: hard-light; opacity:.55;
+  }
+  .fx-silver::after{
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(circle at var(--mx,50%) var(--my,50%),
+      rgba(244,247,251,.55), rgba(210,216,226,.14) 22%, transparent 44%);
+    mix-blend-mode: screen;
+  }
   .fx-holo{
     background: repeating-linear-gradient(calc(115deg + var(--ry,0)*1deg),
       rgba(255,80,170,.4) 0%, rgba(255,225,60,.4) 12%, rgba(90,255,200,.4) 24%,

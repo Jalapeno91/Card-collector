@@ -7,9 +7,10 @@ export const BUILD = '2026-07-31.3';
 export const EFFECTS = {
   matte:  { label:'Matte',        glyph:'●' },
   shiny:  { label:'Shiny',        glyph:'✦' },
+  silver: { label:'Silver foil',  glyph:'✶' },
   gold:   { label:'Gold foil',    glyph:'✸' },
   holo:   { label:'Holographic',  glyph:'◈' },
-  lenticular: { label:'Lenticular', glyph:'▤' },
+  lenticular: { label:'Vertical lenticular', glyph:'▥' },
 };
 
 export const DEFAULT_RARITY_PALETTE = ['#8ab6ff','#a5e0a0','#e0b866','#e08585','#c79cf0','#f0e08a'];
