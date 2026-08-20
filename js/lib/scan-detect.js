@@ -203,23 +203,13 @@ function extractLines(h, limit){
 
 /* ── lines → a quadrilateral ────────────────────────────────────────────── */
 
-// Exported so the manual-correction UI can snap a dragged corner to the
-// intersection of the two nearby lines it's closing in on.
-export function intersect(a, b){
+function intersect(a, b){
   const ta = a.t * Math.PI / THETA_BINS, tb = b.t * Math.PI / THETA_BINS;
   const ca = Math.cos(ta), sa = Math.sin(ta);
   const cb = Math.cos(tb), sb = Math.sin(tb);
   const det = ca*sb - sa*cb;
   if (Math.abs(det) < 1e-6) return null;   // parallel: no single crossing point
   return { x: (a.rho*sb - sa*b.rho) / det, y: (ca*b.rho - a.rho*cb) / det };
-}
-
-// Perpendicular distance from a point to one of these lines — how the
-// manual-correction UI decides whether a dragged corner is close enough to
-// snap.
-export function pointLineDistance(line, p){
-  const theta = line.t * Math.PI / THETA_BINS;
-  return Math.abs(p.x*Math.cos(theta) + p.y*Math.sin(theta) - line.rho);
 }
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -324,6 +314,49 @@ function shapeBonus(quad){
   return 1 + 0.25 * Math.exp(-Math.pow((ratio - 0.716) / 0.12, 2));
 }
 
+// How well a candidate quad matches `foregroundBlob`'s colour-segmented
+// silhouette, when there was a trustworthy one to compare against (1, a
+// neutral no-op, otherwise). This is what breaks a tie between two
+// similarly edge-supported rectangles — a picture frame, a placemat, a
+// patterned surface — where more than one is geometrically plausible but
+// only one actually sits over the region that differs in colour from what
+// is behind it.
+function blobAgreement(quad, blob){
+  if (!blob || !blob.count) return 1;
+  const qCentroid = {
+    x: (quad[0].x+quad[1].x+quad[2].x+quad[3].x) / 4,
+    y: (quad[0].y+quad[1].y+quad[2].y+quad[3].y) / 4,
+  };
+  const qArea = polygonArea(quad);
+  const scale = Math.sqrt(blob.count) || 1;
+  const centroidDist = dist(qCentroid, blob.centroid) / scale;
+  const areaRatio = Math.min(qArea, blob.count) / Math.max(qArea, blob.count);
+  const centroidTerm = Math.exp(-Math.pow(centroidDist / 0.35, 2));
+  return 0.4 + 0.6 * areaRatio * centroidTerm;
+}
+
+// Raises `mag` to its own current maximum wherever `mask` (a foregroundBlob
+// silhouette) has a boundary, so the Hough transform below is guaranteed to
+// treat the colour-segmented outline as real edge pixels even on a low-
+// contrast photo where the grayscale gradient there is weak — a white card
+// on a pale surface, or a face washed out by glare.
+function boostBlobBoundary(mag, mask, width, height){
+  let max = 0;
+  for (let i = 0; i < mag.length; i++) if (mag[i] > max) max = mag[i];
+  if (!(max > 0)) return;
+  for (let y = 0; y < height; y++){
+    for (let x = 0; x < width; x++){
+      const i = y*width + x;
+      const here = mask[i];
+      const l = x > 0 ? mask[i-1] : here, r = x < width-1 ? mask[i+1] : here;
+      const u = y > 0 ? mask[i-width] : here, d = y < height-1 ? mask[i+width] : here;
+      if (here !== l || here !== r || here !== u || here !== d){
+        if (mag[i] < max) mag[i] = max;
+      }
+    }
+  }
+}
+
 /* ── the public detection call ──────────────────────────────────────────── */
 
 // The crop offered when detection finds nothing to be confident about: a
@@ -339,31 +372,38 @@ export function defaultQuad(width, height){
   return [{ x, y }, { x: x+w, y }, { x: x+w, y: y+h }, { x, y: y+h }];
 }
 
-// Returns the card's candidate edges: `quad` (its four corners in the
-// original photo's coordinates, ordered clockwise from the top-left, or null
-// when nothing convincing was found) and `lines`, the straight lines the
-// detector weighed along the way, in the same photo coordinates as the quad
-// and in the `{ t, rho, votes }` shape `intersect`/`pointLineDistance`
-// expect. Kept so manual correction can offer them as snap targets even when
-// no quad won outright.
-export function detectCardEdges(img){
+// Returns the card's four corners in the original photo's coordinates,
+// ordered clockwise from the top-left — or null when nothing convincing was
+// found. Two independent readings feed this: brightness gradients (good
+// wherever the card contrasts sharply with what's under it) and a colour
+// segmentation borrowed from findCardOutline below (good wherever the
+// contrast is more about colour than brightness, or too faint for gradients
+// alone). Neither is trusted on its own — the colour reading only ever
+// reinforces edges and breaks ties between rectangles the gradient reading
+// already considers plausible, so a photo where it finds nothing changes
+// nothing here.
+export function findCardQuad(img){
   const { canvas, scale } = drawScaled(img, WORK_MAX);
   const width = canvas.width, height = canvas.height;
-  if (width < 24 || height < 24) return { quad: null, lines: [] };
+  if (width < 24 || height < 24) return null;
 
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const gray = blur(grayscale(ctx.getImageData(0, 0, width, height)), width, height, 2);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const gray = blur(grayscale(imageData), width, height, 2);
   const { mag, dir } = sobel(gray, width, height);
+
+  const blob = foregroundBlob(imageData.data, width, height, 0.05, 0.98);
+  if (blob) boostBlobBoundary(mag, blob.mask, width, height);
+
   const threshold = edgeThreshold(mag, EDGE_FRACTION);
-  if (!Number.isFinite(threshold)) return { quad: null, lines: [] };
+  if (!Number.isFinite(threshold)) return null;
 
   const lines = extractLines(hough(mag, dir, width, height, threshold), 30);
   // A line's angle here is that of its perpendicular, so the near-upright lines
   // are the ones whose perpendicular points sideways.
   const upright = lines.filter(l => l.t < 45 || l.t >= 135).slice(0, CANDIDATES_PER_AXIS);
   const across  = lines.filter(l => l.t >= 45 && l.t < 135).slice(0, CANDIDATES_PER_AXIS);
-  const photoLines = upright.concat(across).map(l => ({ t: l.t, rho: l.rho / scale, votes: l.votes }));
-  if (upright.length < 2 || across.length < 2) return { quad: null, lines: photoLines };
+  if (upright.length < 2 || across.length < 2) return null;
 
   const minGapX = width * 0.15, minGapY = height * 0.15;
   const shortlist = [];
@@ -385,7 +425,7 @@ export function detectCardEdges(img){
       }
     }
   }
-  if (!shortlist.length) return { quad: null, lines: photoLines };
+  if (!shortlist.length) return null;
 
   // Support is the expensive test, so only the geometrically promising quads
   // earn one.
@@ -394,18 +434,12 @@ export function detectCardEdges(img){
   for (const cand of shortlist.slice(0, 40)){
     const support = outlineSupport(cand.quad, mag, width, height, threshold);
     if (support < OUTLINE_SUPPORT_MIN) continue;
-    const score = support * support * Math.sqrt(cand.areaFrac) * shapeBonus(cand.quad);
+    const score = support * support * Math.sqrt(cand.areaFrac) * shapeBonus(cand.quad) * blobAgreement(cand.quad, blob);
     if (!best || score > best.score) best = { quad: cand.quad, score };
   }
-  if (!best) return { quad: null, lines: photoLines };
+  if (!best) return null;
 
-  const quad = best.quad.map(p => ({ x: p.x / scale, y: p.y / scale }));
-  return { quad, lines: photoLines };
-}
-
-// Returns just the four corners — the shape most callers actually want.
-export function findCardQuad(img){
-  return detectCardEdges(img).quad;
+  return best.quad.map(p => ({ x: p.x / scale, y: p.y / scale }));
 }
 
 /* ── an outline of any shape ────────────────────────────────────────────── */
@@ -530,6 +564,37 @@ function centroidOf(mask, width, height){
   return n ? { x: sx/n, y: sy/n } : null;
 }
 
+// Segments the photo into card vs. background by colour and returns its
+// largest interior region — the same reading findCardOutline traces a full
+// shape from, shared here so the rectangle detector above can lean on it too
+// wherever gradients alone are weak or misleading. Returns null wherever
+// that reading isn't trustworthy (no clean interior region at a believable
+// size), and callers fall back to exactly their prior, colour-blind
+// behaviour.
+function foregroundBlob(data, width, height, areaMin, areaMax){
+  const stats = backgroundStats(data, width, height);
+  const dist = distanceFromBackground(data, width, height, stats);
+  const threshold = otsuThreshold(dist);
+  if (!(threshold > 0)) return null;
+
+  let mask = new Float32Array(width * height);
+  for (let i = 0; i < mask.length; i++) mask[i] = dist[i] > threshold ? 1 : 0;
+  // A blur-then-rethreshold acts as a majority filter: it closes small holes
+  // (glare on a glossy card) and drops single-pixel speckle.
+  mask = blur(mask, width, height, 2);
+  const binary = new Uint8Array(width * height);
+  for (let i = 0; i < binary.length; i++) binary[i] = mask[i] > 0.5 ? 1 : 0;
+
+  const blob = largestInteriorBlob(binary, width, height);
+  if (!blob) return null;
+  const areaFrac = blob.count / (width * height);
+  if (areaFrac < areaMin || areaFrac > areaMax) return null;
+
+  const centroid = centroidOf(blob.mask, width, height);
+  if (!centroid) return null;
+  return { mask: blob.mask, count: blob.count, centroid };
+}
+
 // Walks outward from the centre along `samples` evenly spaced angles,
 // keeping the last pixel still inside the mask on each ray. The result is
 // already in angular order — a polygon, with no separate step needed to
@@ -614,29 +679,10 @@ export function findCardOutline(img){
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const data = ctx.getImageData(0, 0, width, height).data;
 
-  const stats = backgroundStats(data, width, height);
-  const dist = distanceFromBackground(data, width, height, stats);
-  const threshold = otsuThreshold(dist);
-  if (!(threshold > 0)) return null;
-
-  let mask = new Float32Array(width * height);
-  for (let i = 0; i < mask.length; i++) mask[i] = dist[i] > threshold ? 1 : 0;
-  // A blur-then-rethreshold acts as a majority filter: it closes small holes
-  // (glare on a glossy card) and drops single-pixel speckle, reusing the same
-  // box blur the rectangle detector already relies on.
-  mask = blur(mask, width, height, 2);
-  const binary = new Uint8Array(width * height);
-  for (let i = 0; i < binary.length; i++) binary[i] = mask[i] > 0.5 ? 1 : 0;
-
-  const blob = largestInteriorBlob(binary, width, height);
+  const blob = foregroundBlob(data, width, height, OUTLINE_AREA_MIN, OUTLINE_AREA_MAX);
   if (!blob) return null;
-  const areaFrac = blob.count / (width * height);
-  if (areaFrac < OUTLINE_AREA_MIN || areaFrac > OUTLINE_AREA_MAX) return null;
 
-  const centroid = centroidOf(blob.mask, width, height);
-  if (!centroid) return null;
-
-  const raw = radialBoundary(blob.mask, width, height, centroid, OUTLINE_SAMPLES);
+  const raw = radialBoundary(blob.mask, width, height, blob.centroid, OUTLINE_SAMPLES);
   if (raw.length < OUTLINE_MIN_POINTS) return null;
 
   const epsilon = Math.max(1.5, Math.min(width, height) * 0.006);

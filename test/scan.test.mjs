@@ -126,6 +126,33 @@ for (const c of CASES){
   check(`finds the ${c.name} (worst corner off by ${err}px, allowed ${TOLERANCE})`, err <= TOLERANCE, true);
 }
 
+// A card whose brightness nearly matches its background but whose colour
+// doesn't — brightness-gradient edges alone read as almost nothing here, so
+// this stands for a card that's easy to lose to soft light or a washed-out
+// grey backdrop, and exists to prove the colour-segmentation reading findCardQuad
+// leans on catches what gradients alone would miss.
+const LOW_CONTRAST_CORNERS = [{x:260,y:260},{x:640,y:260},{x:640,y:800},{x:260,y:800}];
+const lowContrastErr = await ev(`(async () => {
+  const w = 900, h = 1200;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgb(120,90,80)';
+  x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 900; i++){
+    const px = (i * 137) % w, py = (i * 293) % h;
+    const shade = (i * 61) % 14 - 7;
+    x.fillStyle = 'rgb(' + (120+shade) + ',' + (90+shade) + ',' + (80+shade) + ')';
+    x.fillRect(px, py, 10, 10);
+  }
+  x.fillStyle = 'rgb(60,110,140)';
+  x.fillRect(260, 260, 380, 540);
+  const img = new Image();
+  await new Promise(r => { img.onload = r; img.src = c.toDataURL('image/png'); });
+  const found = window.__scan.findCardQuad(img);
+  return Math.round(window.__worstCornerError(found, ${JSON.stringify(LOW_CONTRAST_CORNERS)}));
+})()`);
+check(`finds a low-contrast, colour-only card (worst corner off by ${lowContrastErr}px, allowed ${TOLERANCE})`, lowContrastErr <= TOLERANCE, true);
+
 // The corners must come back clockwise from the top-left, because everything
 // downstream — which edge is "top", which way up the crop lands — assumes it.
 check('corners come back clockwise from the top-left', await ev(`(async () => {
