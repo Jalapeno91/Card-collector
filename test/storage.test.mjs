@@ -60,6 +60,24 @@ check('blob reads back', await ev(`(await import('/js/store.js')).getBlob('card-
 await navigate();
 check('blob survives reload', await ev(`(await import('/js/store.js')).getBlob('card-photo:test')`), 'data:image/jpeg;base64,AAAA');
 
+console.log('\nblob storage migration (an older build left a photo as text)');
+await ev(`(async () => {
+  const i = await import('/js/lib/idb.js');
+  await i.setMeta('blobStorageIsBinary', false); // simulate the first load after upgrading
+  await i.put('blobs', { key: 'card-photo:legacy', dataUrl: 'data:image/jpeg;base64,AAAA', updatedAt: new Date().toISOString(), deleted: false, dirty: 0 });
+})()`);
+check('a legacy text-shaped row still reads back on its own',
+  await ev(`(await import('/js/store.js')).getBlob('card-photo:legacy')`), 'data:image/jpeg;base64,AAAA');
+await navigate();
+check('the legacy row is rewritten as binary on the next load',
+  await ev(`(async () => {
+    const i = await import('/js/lib/idb.js');
+    const row = await i.get('blobs', 'card-photo:legacy');
+    return [row.blob instanceof Blob, row.dataUrl === undefined];
+  })()`), [true, true]);
+check('and still reads back the same photo afterward',
+  await ev(`(await import('/js/store.js')).getBlob('card-photo:legacy')`), 'data:image/jpeg;base64,AAAA');
+
 console.log('\nderived readings');
 check('series progress counts one of three',
   await ev(`(async()=>{const st=await import('/js/state.js');const c=st.data.collections[0];const p=st.subProgress(c,c.subcollections[0]);return [p.owned,p.total,p.pct];})()`),

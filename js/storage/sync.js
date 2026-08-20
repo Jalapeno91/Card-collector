@@ -88,26 +88,6 @@ function fromRemote(table, row){
   return out;
 }
 
-/* ── data URL ⇄ Blob ────────────────────────────────────────────────────── */
-
-function dataUrlToBlob(dataUrl){
-  const [head, b64] = dataUrl.split(',');
-  const mime = (head.match(/data:([^;]+)/) || [, 'image/jpeg'])[1];
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
-}
-
-function blobToDataUrl(blob){
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
-
 /* ── status ─────────────────────────────────────────────────────────────── */
 
 const listeners = new Set();
@@ -167,7 +147,7 @@ async function pushBlobs(userId){
       await sb.removeObject(path);
       await local.dropBlobRecord(b.key);
     } else {
-      await sb.uploadObject(path, dataUrlToBlob(b.dataUrl));
+      await sb.uploadObject(path, b.blob);
       await local.markBlobClean(b.key);
     }
     pushed++;
@@ -261,7 +241,7 @@ async function pullBlobs(userId){
       // Not there yet — the device that owns it may not have finished
       // uploading. Leave it; a later sync will pick it up.
       if (!blob){ missing++; continue; }
-      await local.putBlobFromRemote(key, await blobToDataUrl(blob), stamp || new Date().toISOString());
+      await local.putBlobFromRemote(key, blob, stamp || new Date().toISOString());
       fetched++;
     }catch(err){
       // One unreadable photo must not abort the sync and strand every other

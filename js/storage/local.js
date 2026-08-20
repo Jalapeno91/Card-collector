@@ -176,6 +176,59 @@ export const photoKey = cardId => 'card-photo:' + cardId;
 export const photoBackKey = cardId => 'card-photo-back:' + cardId;
 export const rarityBackPhotoKey = (subId, rarityId) => 'rarity-back-photo:' + subId + ':' + rarityId;
 
+/* ── data URL ⇄ Blob ────────────────────────────────────────────────────── */
+//
+// Photos are kept on disk as a Blob — the browser's native binary form —
+// rather than the base64 text a data URL needs, which costs roughly a third
+// more space to hold the same image. Every caller in the app still hands
+// this file a data URL and expects one back (that's what an <img src> or a
+// CSS background-image wants), so the conversion happens right here, each
+// time a photo is read or written, and nothing outside this file has to
+// know the on-disk shape changed.
+
+function dataUrlToBlob(dataUrl){
+  const [head, b64] = dataUrl.split(',');
+  const mime = (head.match(/data:([^;]+)/) || [, 'image/jpeg'])[1];
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+function blobToDataUrl(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// One-time upgrade for photos saved by an older build, back when this store
+// held them as `dataUrl` text. Runs once (a meta flag skips it on every
+// later load) and rewrites each row as a bare `{ key, blob, updatedAt,
+// deleted, dirty }` record, so the old text is fully replaced rather than
+// kept alongside the new copy — the point is to shrink what is on disk, not
+// double it.
+async function migrateBlobsToBinary(){
+  const done = await idb.getMeta('blobStorageIsBinary', false);
+  if (done) return;
+  const rows = await idb.getAll('blobs');
+  const writes = [];
+  for (const row of rows){
+    if (row.blob || !row.dataUrl) continue;
+    writes.push({
+      key: row.key,
+      blob: dataUrlToBlob(row.dataUrl),
+      updatedAt: row.updatedAt,
+      deleted: !!row.deleted,
+      dirty: row.dirty,
+    });
+  }
+  if (writes.length) await idb.putMany('blobs', writes);
+  await idb.setMeta('blobStorageIsBinary', true);
+}
+
 /* ── public API ─────────────────────────────────────────────────────────── */
 
 export async function loadRows(){
@@ -186,6 +239,7 @@ export async function loadRows(){
 }
 
 export async function loadTree(){
+  await migrateBlobsToBinary();
   const rows = await loadRows();
   shadow = { collections: new Map(), subcollections: new Map(), cards: new Map() };
   ROW_STORES.forEach(store => {
@@ -236,16 +290,22 @@ export async function saveTree(tree){
   return touched;
 }
 
-/* ── blobs (photos and logos, held as data URLs) ────────────────────────── */
+/* ── blobs (photos and logos, held on disk as binary Blobs) ─────────────── */
 
 export async function getBlob(key){
   const row = await idb.get('blobs', key);
-  return row && !row.deleted ? row.dataUrl : null;
+  if (!row || row.deleted) return null;
+  // The `dataUrl` branch only ever fires for a row migrateBlobsToBinary
+  // hasn't reached yet — belt-and-suspenders so a photo is never unreadable
+  // partway through the upgrade.
+  if (row.blob) return blobToDataUrl(row.blob);
+  if (row.dataUrl) return row.dataUrl;
+  return null;
 }
 
 export async function setBlob(key, dataUrl){
   const stamp = now();
-  await idb.put('blobs', { key, dataUrl, updatedAt: stamp, deleted: false, dirty: 1 });
+  await idb.put('blobs', { key, blob: dataUrlToBlob(dataUrl), updatedAt: stamp, deleted: false, dirty: 1 });
   blobStamps.set(key, stamp);
 }
 
@@ -255,13 +315,15 @@ export async function deleteBlob(key){
   // Nothing was ever stored under this key, so there is nothing to tell the
   // server about either.
   if (!existing){ blobStamps.delete(key); return; }
-  await idb.put('blobs', { key, dataUrl: null, updatedAt: stamp, deleted: true, dirty: 1 });
+  await idb.put('blobs', { key, blob: null, updatedAt: stamp, deleted: true, dirty: 1 });
   blobStamps.delete(key);
 }
 
 // Used by the sync engine when the server hands us a photo we don't have.
-export async function putBlobFromRemote(key, dataUrl, updatedAt){
-  await idb.put('blobs', { key, dataUrl, updatedAt, deleted: false, dirty: 0 });
+// Takes the Blob straight off the download — sb.downloadObject already reads
+// one, and there is no reason to round-trip it through text just to store it.
+export async function putBlobFromRemote(key, blob, updatedAt){
+  await idb.put('blobs', { key, blob, updatedAt, deleted: false, dirty: 0 });
   blobStamps.set(key, updatedAt);
 }
 
